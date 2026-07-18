@@ -89,6 +89,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
 				/>
 				<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 				<title>Agentic Inbox</title>
+				<script
+					// Anti-flash: apply the saved theme before first paint. Runs
+					// before app modules load, so the storage key below is a
+					// hard-coded duplicate of THEME_STORAGE_KEY in
+					// app/hooks/useThemeStore.ts — keep both in sync.
+					dangerouslySetInnerHTML={{
+						__html: `(function(){try{var t=localStorage.getItem("agentic-inbox-theme");if(t==="dark"||t==="light"){var r=document.documentElement;r.dataset.mode=t;r.style.colorScheme=t;}}catch(e){}})();`,
+					}}
+				/>
 				<Meta />
 				<Links />
 			</head>
