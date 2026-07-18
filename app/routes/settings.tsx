@@ -3,10 +3,16 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 import { Badge, Button, Input, Loader, useKumoToastManager } from "@cloudflare/kumo";
-import { RobotIcon, ArrowCounterClockwiseIcon } from "@phosphor-icons/react";
+import {
+	ArrowCounterClockwiseIcon,
+	MoonIcon,
+	RobotIcon,
+	SunIcon,
+} from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router";
 import { useMailbox, useUpdateMailbox } from "~/queries/mailboxes";
+import { useThemeStore } from "~/hooks/useThemeStore";
 
 // Placeholder shown in the textarea when no custom prompt is set.
 // The authoritative default prompt lives in workers/agent/index.ts (DEFAULT_SYSTEM_PROMPT).
@@ -17,6 +23,8 @@ export default function SettingsRoute() {
 	const toastManager = useKumoToastManager();
 	const { data: mailbox } = useMailbox(mailboxId);
 	const updateMailboxMutation = useUpdateMailbox();
+	const theme = useThemeStore((s) => s.theme);
+	const setTheme = useThemeStore((s) => s.setTheme);
 
 	const [displayName, setDisplayName] = useState("");
 	const [agentPrompt, setAgentPrompt] = useState("");
@@ -69,6 +77,40 @@ export default function SettingsRoute() {
 			<h1 className="text-lg font-semibold text-kumo-default mb-6">Settings</h1>
 
 			<div className="space-y-6">
+				{/* Appearance */}
+				<div className="rounded-lg border border-kumo-line bg-kumo-base p-5">
+					<div className="flex items-center gap-2 mb-4">
+						<SunIcon size={16} weight="duotone" className="text-kumo-subtle" />
+						<span className="text-sm font-medium text-kumo-default">
+							Appearance
+						</span>
+					</div>
+					<p className="text-xs text-kumo-subtle mb-3">
+						Choose how Agentic Inbox looks. Applies instantly — no save
+						needed, and separate from the mailbox settings below.
+					</p>
+					<div className="flex gap-2">
+						<Button
+							variant={theme === "light" ? "primary" : "secondary"}
+							size="sm"
+							icon={<SunIcon size={14} />}
+							onClick={() => setTheme("light")}
+							aria-pressed={theme === "light"}
+						>
+							Light
+						</Button>
+						<Button
+							variant={theme === "dark" ? "primary" : "secondary"}
+							size="sm"
+							icon={<MoonIcon size={14} />}
+							onClick={() => setTheme("dark")}
+							aria-pressed={theme === "dark"}
+						>
+							Dark
+						</Button>
+					</div>
+				</div>
+
 				{/* Account */}
 				<div className="rounded-lg border border-kumo-line bg-kumo-base p-5">
 					<div className="text-sm font-medium text-kumo-default mb-4">

@@ -89,6 +89,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 				/>
 				<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 				<title>Agentic Inbox</title>
+				{/* Anti-flash: render-blocking, applies the saved theme before
+				    first paint. External file so a strict CSP (script-src 'self')
+				    can be added without a hash/nonce. */}
+				<script src="/noflash.js" />
 				<Meta />
 				<Links />
 			</head>
