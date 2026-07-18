@@ -24,9 +24,14 @@ toggle UI — not a restyling effort.
 
 ## Approach
 
-localStorage + inline anti-flash script (rejected alternatives: cookie-based SSR
-rendering — too much machinery for a cosmetic pref; mount-only localStorage read —
-causes a visible light flash before dark applies).
+localStorage + render-blocking anti-flash script served as an external static
+file (`public/noflash.js`, referenced from `app/root.tsx`). External rather
+than inline so a strict CSP (`script-src 'self'`) can be added later without a
+hash/nonce — the pattern used by cartridge-gg/controller's keychain.
+(Rejected alternatives: cookie-based SSR rendering — too much machinery for a
+cosmetic pref; mount-only localStorage read — causes a visible light flash
+before dark applies; inline `<script>` — equivalent semantics but needs a
+CSP hash/nonce later and `dangerouslySetInnerHTML` in JSX.)
 
 ## Components
 
@@ -45,10 +50,11 @@ A small zustand store, matching the existing `useUIStore` pattern:
 - Only the exact stored values `"light"` and `"dark"` are honored; anything else
   (missing, corrupted, old value) falls back to `"light"`.
 
-### 2. Anti-flash inline script — `app/root.tsx`
+### 2. Anti-flash script — `public/noflash.js` + `app/root.tsx`
 
-An inline `<script>` in `<head>` (via `dangerouslySetInnerHTML`, placed before
-`<Links/>`) that runs before first paint:
+`public/noflash.js` is a static asset loaded with `<script src="/noflash.js" />`
+(no `defer`/`async`, i.e. render-blocking) in `Layout`'s `<head>`, placed after
+`<title>` and before `<Meta />`. It runs before first paint:
 
 1. Reads `localStorage["agentic-inbox-theme"]` inside try/catch.
 2. If the value is exactly `"dark"` or `"light"`, sets `data-mode` and
@@ -61,8 +67,8 @@ dark pre-paint when dark is saved. No root loader, no cookies, no server-side
 changes.
 
 The localStorage key string appears in both this script and the theme store; the
-script must stay inline and self-contained (it cannot import app modules), so the
-duplication is accepted and called out in a comment in both places.
+script is a static asset that cannot import app modules, so the duplication is
+accepted and called out in a comment in both places.
 
 ### 3. Settings UI — `app/routes/settings.tsx`
 
@@ -83,8 +89,9 @@ markup as the existing Account/Agent sections
 
 ## Data flow
 
-1. First paint: SSR HTML has no `data-mode` (light). Inline script reads
-   localStorage and sets `data-mode="dark"` pre-paint when saved → no flash.
+1. First paint: SSR HTML has no `data-mode` (light). The render-blocking
+   `noflash.js` reads localStorage and sets `data-mode="dark"` pre-paint when
+   saved → no flash.
 2. Hydration: theme store initializes from the same localStorage key → React
    state matches the DOM.
 3. Toggle: settings control → `setTheme` → localStorage write +
@@ -94,8 +101,8 @@ markup as the existing Account/Agent sections
 
 ## Error handling
 
-- localStorage unavailable/throws (private mode, disabled storage): inline script
-  no-ops (light theme); store reads/writes are guarded so the UI still toggles for
+- localStorage unavailable/throws (private mode, disabled storage): the
+  anti-flash script no-ops (light theme); store reads/writes are guarded so the UI still toggles for
   the session even if persistence fails.
 - Corrupted stored value: ignored, falls back to light.
 
@@ -113,7 +120,8 @@ markup as the existing Account/Agent sections
 | File | Change |
 | --- | --- |
 | `app/hooks/useThemeStore.ts` | New — zustand theme store |
-| `app/root.tsx` | Add inline anti-flash script in `<head>` |
+| `public/noflash.js` | New — render-blocking anti-flash script (static asset) |
+| `app/root.tsx` | Reference `/noflash.js` in `<head>` |
 | `app/routes/settings.tsx` | Add "Appearance" card |
 
 ## Verification

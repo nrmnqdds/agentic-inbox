@@ -8,9 +8,8 @@ export type Theme = "light" | "dark";
 
 /**
  * localStorage key for the theme preference.
- * NOTE: This key string is duplicated in the inline anti-flash script in
- * app/root.tsx — that script runs before app modules load and cannot import
- * this constant. Keep both in sync.
+ * NOTE: This key string is duplicated in public/noflash.js — that script runs
+ * before app modules load and cannot import this constant. Keep both in sync.
  */
 export const THEME_STORAGE_KEY = "agentic-inbox-theme";
 
