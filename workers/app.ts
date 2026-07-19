@@ -4,14 +4,14 @@
 
 import { routeAgentRequest } from "agents";
 import { Hono } from "hono";
-import { jwtVerify, createRemoteJWKSet } from "jose";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import { createRequestHandler } from "react-router";
-import { app as apiApp, receiveEmail } from "./index";
+import { app as apiApp, forwardIncomingEmail, receiveEmail } from "./index";
 import { EmailMCP } from "./mcp";
 import type { Env } from "./types";
 
-export { MailboxDO } from "./durableObject";
 export { EmailAgent } from "./agent";
+export { MailboxDO } from "./durableObject";
 export { EmailMCP } from "./mcp";
 
 declare module "react-router" {
@@ -111,12 +111,16 @@ app.all("*", (c) => {
 export default {
 	fetch: app.fetch,
 	async email(
-		event: { raw: ReadableStream; rawSize: number },
+		message: ForwardableEmailMessage,
 		env: Env,
 		ctx: ExecutionContext,
 	) {
+		// Forward a copy first (best-effort — never blocks ingestion). If
+		// receiveEmail later throws, Cloudflare retries the whole event and this
+		// re-forwards, so a rare processing failure can produce a duplicate copy.
+		await forwardIncomingEmail(message, env);
 		try {
-			await receiveEmail(event, env, ctx);
+			await receiveEmail(message, env, ctx);
 		} catch (e) {
 			console.error(
 				"Failed to process incoming email:",

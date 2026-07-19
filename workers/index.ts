@@ -6,20 +6,20 @@ import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import PostalMime from "postal-mime";
 import { z } from "zod";
-import { sendEmail } from "./email-sender";
-import { storeAttachments, type StoredAttachment } from "./lib/attachments";
-import {
-	validateSender,
-	SenderValidationError,
-	generateMessageId,
-	buildThreadingHeaders,
-	listMailboxes,
-} from "./lib/email-helpers";
-import { SendEmailRequestSchema } from "./lib/schemas";
-import { handleReplyEmail, handleForwardEmail } from "./routes/reply-forward";
 import { Folders } from "../shared/folders";
+import { sendEmail } from "./email-sender";
+import { type StoredAttachment, storeAttachments } from "./lib/attachments";
+import {
+	buildThreadingHeaders,
+	generateMessageId,
+	listMailboxes,
+	SenderValidationError,
+	validateSender,
+} from "./lib/email-helpers";
+import { type MailboxContext, requireMailbox } from "./lib/mailbox";
+import { SendEmailRequestSchema } from "./lib/schemas";
+import { handleForwardEmail, handleReplyEmail } from "./routes/reply-forward";
 import type { Env } from "./types";
-import { requireMailbox, type MailboxContext } from "./lib/mailbox";
 
 type AppContext = Context<MailboxContext>;
 
@@ -540,6 +540,22 @@ async function streamToArrayBuffer(stream: ReadableStream, streamSize: number) {
 	return result;
 }
 
+// Forward a copy of an inbound message to the configured destination.
+// Best-effort: a forwarding failure (e.g. destination not yet verified in
+// Email Routing) is logged but never blocks ingestion. `message.forward()`
+// only relays to addresses verified via `wrangler email routing addresses create`.
+async function forwardIncomingEmail(
+	message: ForwardableEmailMessage,
+	env: Env,
+) {
+	if (!env.FORWARD_TO) return;
+	try {
+		await message.forward(env.FORWARD_TO);
+	} catch (e) {
+		console.error("Failed to forward email:", (e as Error).message);
+	}
+}
+
 async function receiveEmail(
 	event: { raw: ReadableStream; rawSize: number },
 	env: Env,
@@ -679,4 +695,4 @@ async function receiveEmail(
 	);
 }
 
-export { app, receiveEmail };
+export { app, forwardIncomingEmail, receiveEmail };
