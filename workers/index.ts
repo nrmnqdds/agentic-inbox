@@ -8,7 +8,11 @@ import PostalMime from "postal-mime";
 import { z } from "zod";
 import { Folders } from "../shared/folders";
 import { sendEmail } from "./email-sender";
-import { type StoredAttachment, storeAttachments } from "./lib/attachments";
+import {
+	appendDownloadLinks,
+	type StoredAttachment,
+	storeAttachments,
+} from "./lib/attachments";
 import {
 	buildThreadingHeaders,
 	generateMessageId,
@@ -22,6 +26,116 @@ import { handleForwardEmail, handleReplyEmail } from "./routes/reply-forward";
 import type { Env } from "./types";
 
 type AppContext = Context<MailboxContext>;
+
+// -- Attachment download token helpers -------------------------------
+
+const SIGNING_KEY_PATH = "_system/attachment-signing-key";
+const DEFAULT_LINK_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/**
+ * Fetch or create the HMAC signing key from R2.
+ * The key is a 32-byte random value stored once in R2 at _system/attachment-signing-key.
+ */
+async function getSigningKey(env: Env): Promise<CryptoKey> {
+	const existing = await env.BUCKET.get(SIGNING_KEY_PATH);
+	let rawKey: ArrayBuffer;
+	if (existing) {
+		rawKey = await existing.arrayBuffer();
+	} else {
+		rawKey = crypto.getRandomValues(new Uint8Array(32)).buffer;
+		await env.BUCKET.put(SIGNING_KEY_PATH, new Uint8Array(rawKey));
+	}
+	return crypto.subtle.importKey(
+		"raw",
+		rawKey,
+		{ name: "HMAC", hash: "SHA-256" },
+		false,
+		["sign", "verify"],
+	);
+}
+
+interface DownloadTokenPayload {
+	emailId: string;
+	attachmentId: string;
+	mailboxId: string;
+	expiry: number; // unix ms
+}
+
+/**
+ * Create a signed download token.
+ * Format: base64url(JSON(payload)) . base64url(HMAC-SHA256(key, payload_bytes))
+ */
+async function createDownloadToken(
+	key: CryptoKey,
+	emailId: string,
+	attachmentId: string,
+	mailboxId: string,
+	expiryMs: number = Date.now() + DEFAULT_LINK_EXPIRY_MS,
+): Promise<string> {
+	const payload: DownloadTokenPayload = {
+		emailId,
+		attachmentId,
+		mailboxId,
+		expiry: expiryMs,
+	};
+	const encoder = new TextEncoder();
+	const payloadBytes = encoder.encode(JSON.stringify(payload));
+	const signature = await crypto.subtle.sign("HMAC", key, payloadBytes);
+	const payloadB64 = btoa(String.fromCharCode(...new Uint8Array(payloadBytes)))
+		.replace(/\+/g, "-")
+		.replace(/\//g, "_")
+		.replace(/=+$/, "");
+	const sigB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+		.replace(/\+/g, "-")
+		.replace(/\//g, "_")
+		.replace(/=+$/, "");
+	return `${payloadB64}.${sigB64}`;
+}
+
+/**
+ * Verify a download token and return the payload, or null if invalid/expired.
+ */
+async function verifyDownloadToken(
+	key: CryptoKey,
+	token: string,
+): Promise<DownloadTokenPayload | null> {
+	try {
+		const dotIdx = token.lastIndexOf(".");
+		if (dotIdx === -1) return null;
+		const payloadB64 = token.slice(0, dotIdx);
+		const sigB64 = token.slice(dotIdx + 1);
+		const decoder = new TextDecoder();
+
+		// Decode base64url
+		const b64ToBytes = (s: string) => {
+			s = s.replace(/-/g, "+").replace(/_/g, "/");
+			while (s.length % 4) s += "=";
+			const binary = atob(s);
+			return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+		};
+
+		const payloadBytes = b64ToBytes(payloadB64);
+		const sigBytes = b64ToBytes(sigB64);
+
+		// Verify HMAC
+		const valid = await crypto.subtle.verify(
+			"HMAC",
+			key,
+			sigBytes,
+			payloadBytes,
+		);
+		if (!valid) return null;
+
+		const payload: DownloadTokenPayload = JSON.parse(
+			decoder.decode(payloadBytes),
+		);
+		if (Date.now() > payload.expiry) return null; // expired
+
+		return payload;
+	} catch {
+		return null;
+	}
+}
 
 // -- Request body schemas (kept for validation) ---------------------
 
@@ -72,6 +186,7 @@ function boolQuery(c: AppContext, key: string): boolean | undefined {
 // -- App & middleware -----------------------------------------------
 
 const app = new Hono<MailboxContext>();
+
 app.use(
 	"/api/*",
 	cors({
@@ -115,11 +230,19 @@ app.get("/api/v1/mailboxes", async (c) => {
 });
 
 app.post("/api/v1/mailboxes", async (c) => {
-	const {
-		name,
-		settings,
-		email: rawEmail,
-	} = CreateMailboxBody.parse(await c.req.json());
+	let parsed: z.infer<typeof CreateMailboxBody>;
+	try {
+		parsed = CreateMailboxBody.parse(await c.req.json());
+	} catch (e) {
+		// Invalid JSON or schema violation (e.g. non-email `email`, missing `name`).
+		// Return a clean 400 instead of letting the error surface as a 500.
+		const detail =
+			e instanceof z.ZodError
+				? e.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")
+				: "malformed request body";
+		return c.json({ error: `Invalid request body: ${detail}` }, 400);
+	}
+	const { name, settings, email: rawEmail } = parsed;
 	const email = rawEmail.toLowerCase();
 	const allowedAddresses = (c.env.EMAIL_ADDRESSES ?? []) as string[];
 	if (
@@ -255,6 +378,34 @@ app.post("/api/v1/mailboxes/:mailboxId/emails", async (c: AppContext) => {
 		attachments,
 	);
 
+	// Real attachments go out as secure, self-expiring /d/ links instead of
+	// MIME parts; inline images (referenced by cid: in the HTML) stay attached.
+	const linkAttachments = attachmentData.filter(
+		(a) => a.disposition !== "inline",
+	);
+	let outgoingHtml = html;
+	let outgoingText = text;
+	if (linkAttachments.length > 0) {
+		const origin = new URL(c.req.url).origin;
+		const signingKey = await getSigningKey(c.env);
+		const downloadLinks = await Promise.all(
+			linkAttachments.map(async (a) => ({
+				filename: a.filename,
+				url: `${origin}/d/${await createDownloadToken(
+					signingKey,
+					messageId,
+					a.id,
+					mailboxId,
+				)}`,
+			})),
+		);
+		({ html: outgoingHtml, text: outgoingText } = appendDownloadLinks(
+			downloadLinks,
+			html,
+			text,
+		));
+	}
+
 	await stub.createEmail(
 		Folders.SENT,
 		{
@@ -267,7 +418,7 @@ app.post("/api/v1/mailboxes/:mailboxId/emails", async (c: AppContext) => {
 				? (Array.isArray(bcc) ? bcc.join(", ") : bcc).toLowerCase()
 				: null,
 			date: new Date().toISOString(),
-			body: html || text || "",
+			body: outgoingHtml || outgoingText || "",
 			in_reply_to: in_reply_to || null,
 			email_references: references ? JSON.stringify(references) : null,
 			thread_id: thread_id || in_reply_to || messageId,
@@ -300,15 +451,19 @@ app.post("/api/v1/mailboxes/:mailboxId/emails", async (c: AppContext) => {
 			bcc,
 			from,
 			subject,
-			html,
-			text,
-			attachments: attachments?.map((att) => ({
-				content: att.content,
-				filename: att.filename,
-				type: att.type,
-				disposition: att.disposition || "attachment",
-				contentId: att.contentId,
-			})),
+			html: outgoingHtml,
+			text: outgoingText,
+			// Only inline images are delivered as MIME parts; regular files were
+			// converted to download links appended to the body above.
+			attachments: attachments
+				?.filter((att) => att.disposition === "inline")
+				.map((att) => ({
+					content: att.content,
+					filename: att.filename,
+					type: att.type,
+					disposition: att.disposition,
+					contentId: att.contentId,
+				})),
 			...(in_reply_to
 				? { headers: buildThreadingHeaders(in_reply_to, references || []) }
 				: {}),
@@ -695,4 +850,11 @@ async function receiveEmail(
 	);
 }
 
-export { app, forwardIncomingEmail, receiveEmail };
+export {
+	app,
+	createDownloadToken,
+	forwardIncomingEmail,
+	getSigningKey,
+	receiveEmail,
+	verifyDownloadToken,
+};
