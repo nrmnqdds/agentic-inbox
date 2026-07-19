@@ -47,7 +47,10 @@ const SORT_COLUMN_MAP = {
 	date: schema.emails.date,
 	read: schema.emails.read,
 	starred: schema.emails.starred,
-} satisfies Record<SortColumn, typeof schema.emails[keyof typeof schema.emails]>;
+} satisfies Record<
+	SortColumn,
+	(typeof schema.emails)[keyof typeof schema.emails]
+>;
 
 interface SearchFilterOptions {
 	query: string;
@@ -211,11 +214,7 @@ export class MailboxDO extends DurableObject<Env> {
 	// ── Threaded queries (raw SQL — too complex for Drizzle's builder) ──
 
 	async getThreadedEmails(options: GetEmailsOptions = {}) {
-		const {
-			folder,
-			page = 1,
-			limit: rawLimit = 25,
-		} = options;
+		const { folder, page = 1, limit: rawLimit = 25 } = options;
 		const limit = Math.min(Math.max(rawLimit, 1), 100);
 
 		if (!folder) {
@@ -274,7 +273,9 @@ export class MailboxDO extends DurableObject<Env> {
 				WHERE lp.rn = 1
 				ORDER BY lp.date DESC
 				LIMIT ?2 OFFSET ?3`,
-				folder, limit, offset
+				folder,
+				limit,
+				offset,
 			);
 
 			const rows = [...result];
@@ -369,7 +370,9 @@ export class MailboxDO extends DurableObject<Env> {
 			WHERE lif.rn = 1
 			ORDER BY lif.date DESC
 			LIMIT ?2 OFFSET ?3`,
-			folder, limit, offset
+			folder,
+			limit,
+			offset,
 		);
 
 		const rows = [...result];
@@ -552,10 +555,7 @@ export class MailboxDO extends DurableObject<Env> {
 			.where(eq(schema.attachments.email_id, id))
 			.all();
 
-		this.db
-			.delete(schema.emails)
-			.where(eq(schema.emails.id, id))
-			.run();
+		this.db.delete(schema.emails).where(eq(schema.emails.id, id)).run();
 
 		return emailAttachments;
 	}
@@ -577,7 +577,10 @@ export class MailboxDO extends DurableObject<Env> {
 			.select({
 				id: schema.folders.id,
 				name: schema.folders.name,
-				unreadCount: sql<number>`COALESCE(SUM(CASE WHEN ${schema.emails.read} = 0 THEN 1 ELSE 0 END), 0)`.mapWith(Number),
+				unreadCount:
+					sql<number>`COALESCE(SUM(CASE WHEN ${schema.emails.read} = 0 THEN 1 ELSE 0 END), 0)`.mapWith(
+						Number,
+					),
 			})
 			.from(schema.folders)
 			.leftJoin(schema.emails, eq(schema.emails.folder_id, schema.folders.id))
@@ -595,7 +598,10 @@ export class MailboxDO extends DurableObject<Env> {
 				.get();
 			return { ...result, unreadCount: 0 };
 		} catch (e: unknown) {
-			if (e instanceof Error && e.message.includes("UNIQUE constraint failed")) {
+			if (
+				e instanceof Error &&
+				e.message.includes("UNIQUE constraint failed")
+			) {
 				return null;
 			}
 			throw e;
@@ -623,10 +629,7 @@ export class MailboxDO extends DurableObject<Env> {
 			return false;
 		}
 
-		this.db
-			.delete(schema.folders)
-			.where(eq(schema.folders.id, id))
-			.run();
+		this.db.delete(schema.folders).where(eq(schema.folders.id, id)).run();
 
 		return true;
 	}
@@ -659,7 +662,18 @@ export class MailboxDO extends DurableObject<Env> {
 		options: SearchFilterOptions,
 		tableAlias = "",
 	): { conditions: string[]; params: (string | number)[] } {
-		const { query, folder, from, to, subject, date_start, date_end, is_read, is_starred, has_attachment } = options;
+		const {
+			query,
+			folder,
+			from,
+			to,
+			subject,
+			date_start,
+			date_end,
+			is_read,
+			is_starred,
+			has_attachment,
+		} = options;
 		const prefix = tableAlias ? `${tableAlias}.` : "";
 		const conditions: string[] = [];
 		const params: (string | number)[] = [];
@@ -676,30 +690,64 @@ export class MailboxDO extends DurableObject<Env> {
 			const p2 = addParam(`%${query}%`);
 			const p3 = addParam(`%${query}%`);
 			const p4 = addParam(`%${query}%`);
-			conditions.push(`(${prefix}subject LIKE ${p1} OR ${prefix}body LIKE ${p2} OR ${prefix}sender LIKE ${p3} OR ${prefix}recipient LIKE ${p4} OR ${prefix}cc LIKE ${p4} OR ${prefix}bcc LIKE ${p4})`);
+			conditions.push(
+				`(${prefix}subject LIKE ${p1} OR ${prefix}body LIKE ${p2} OR ${prefix}sender LIKE ${p3} OR ${prefix}recipient LIKE ${p4} OR ${prefix}cc LIKE ${p4} OR ${prefix}bcc LIKE ${p4})`,
+			);
 		}
 		if (folder) {
 			const p = addParam(folder);
-			conditions.push(`${prefix}folder_id = (SELECT id FROM folders WHERE name = ${p} OR id = ${p} LIMIT 1)`);
+			conditions.push(
+				`${prefix}folder_id = (SELECT id FROM folders WHERE name = ${p} OR id = ${p} LIMIT 1)`,
+			);
 		}
-		if (from) { const p = addParam(`%${from}%`); conditions.push(`${prefix}sender LIKE ${p}`); }
-		if (to) { const p = addParam(`%${to}%`); conditions.push(`(${prefix}recipient LIKE ${p} OR ${prefix}cc LIKE ${p} OR ${prefix}bcc LIKE ${p})`); }
-		if (subject) { const p = addParam(`%${subject}%`); conditions.push(`${prefix}subject LIKE ${p}`); }
-		if (date_start) { const p = addParam(date_start); conditions.push(`${prefix}date >= ${p}`); }
-		if (date_end) { const p = addParam(date_end); conditions.push(`${prefix}date <= ${p}`); }
-		if (is_read !== undefined) { const p = addParam(is_read ? 1 : 0); conditions.push(`${prefix}read = ${p}`); }
-		if (is_starred !== undefined) { const p = addParam(is_starred ? 1 : 0); conditions.push(`${prefix}starred = ${p}`); }
-		if (has_attachment) { conditions.push(`${prefix}id IN (SELECT DISTINCT email_id FROM attachments)`); }
+		if (from) {
+			const p = addParam(`%${from}%`);
+			conditions.push(`${prefix}sender LIKE ${p}`);
+		}
+		if (to) {
+			const p = addParam(`%${to}%`);
+			conditions.push(
+				`(${prefix}recipient LIKE ${p} OR ${prefix}cc LIKE ${p} OR ${prefix}bcc LIKE ${p})`,
+			);
+		}
+		if (subject) {
+			const p = addParam(`%${subject}%`);
+			conditions.push(`${prefix}subject LIKE ${p}`);
+		}
+		if (date_start) {
+			const p = addParam(date_start);
+			conditions.push(`${prefix}date >= ${p}`);
+		}
+		if (date_end) {
+			const p = addParam(date_end);
+			conditions.push(`${prefix}date <= ${p}`);
+		}
+		if (is_read !== undefined) {
+			const p = addParam(is_read ? 1 : 0);
+			conditions.push(`${prefix}read = ${p}`);
+		}
+		if (is_starred !== undefined) {
+			const p = addParam(is_starred ? 1 : 0);
+			conditions.push(`${prefix}starred = ${p}`);
+		}
+		if (has_attachment) {
+			conditions.push(
+				`${prefix}id IN (SELECT DISTINCT email_id FROM attachments)`,
+			);
+		}
 
 		return { conditions, params };
 	}
 
-	async searchEmails(options: SearchFilterOptions & { page?: number; limit?: number }) {
+	async searchEmails(
+		options: SearchFilterOptions & { page?: number; limit?: number },
+	) {
 		const { page = 1, limit: rawLimit = 25 } = options;
 		const limit = Math.min(Math.max(rawLimit, 1), 100);
 		const { conditions, params } = this.#buildSearchConditions(options, "e");
 
-		const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+		const where =
+			conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 		const offset = (page - 1) * limit;
 
 		const query = `
@@ -728,7 +776,8 @@ export class MailboxDO extends DurableObject<Env> {
 	async countSearchResults(options: SearchFilterOptions) {
 		const { conditions, params } = this.#buildSearchConditions(options);
 
-		const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+		const where =
+			conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 		const query = `SELECT COUNT(*) as total FROM emails ${where}`;
 
 		const row = [...this.ctx.storage.sql.exec(query, ...params)][0] as
@@ -739,7 +788,10 @@ export class MailboxDO extends DurableObject<Env> {
 
 	// ── Threading helpers (raw SQL) ────────────────────────────────
 
-	async findThreadBySubject(subject: string, senderAddress?: string): Promise<string | null> {
+	async findThreadBySubject(
+		subject: string,
+		senderAddress?: string,
+	): Promise<string | null> {
 		const normalized = subject
 			.replace(/^(?:(?:re|fwd?|fw|aw|wg|r[eé]f|sv)\s*:\s*)+/i, "")
 			.trim()
@@ -791,23 +843,27 @@ export class MailboxDO extends DurableObject<Env> {
 	 * Returns null if under limit, or an error message string if exceeded.
 	 */
 	async checkSendRateLimit(): Promise<string | null> {
-		const hourRow = [...this.ctx.storage.sql.exec(
-			`SELECT COUNT(*) as cnt FROM emails
+		const hourRow = [
+			...this.ctx.storage.sql.exec(
+				`SELECT COUNT(*) as cnt FROM emails
 			 WHERE folder_id = ?1
 			   AND date >= datetime('now', '-1 hour')`,
-			Folders.SENT,
-		)][0] as { cnt: number } | undefined;
+				Folders.SENT,
+			),
+		][0] as { cnt: number } | undefined;
 
 		if ((hourRow?.cnt ?? 0) >= 20) {
 			return "Rate limit exceeded: max 20 emails per hour per mailbox";
 		}
 
-		const dayRow = [...this.ctx.storage.sql.exec(
-			`SELECT COUNT(*) as cnt FROM emails
+		const dayRow = [
+			...this.ctx.storage.sql.exec(
+				`SELECT COUNT(*) as cnt FROM emails
 			 WHERE folder_id = ?1
 			   AND date >= datetime('now', '-1 day')`,
-			Folders.SENT,
-		)][0] as { cnt: number } | undefined;
+				Folders.SENT,
+			),
+		][0] as { cnt: number } | undefined;
 
 		if ((dayRow?.cnt ?? 0) >= 100) {
 			return "Rate limit exceeded: max 100 emails per day per mailbox";
@@ -854,7 +910,7 @@ export class MailboxDO extends DurableObject<Env> {
 				cc: email.cc ?? null,
 				bcc: email.bcc ?? null,
 				date: email.date,
-				read: isSent ? 1 : (email.read ? 1 : 0),
+				read: isSent ? 1 : email.read ? 1 : 0,
 				starred: email.starred ? 1 : 0,
 				body: email.body,
 				in_reply_to: email.in_reply_to ?? null,

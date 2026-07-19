@@ -35,25 +35,35 @@ export async function handleReplyEmail(c: AppContext) {
 	}
 
 	const originalEmail = await resolveOriginalEmail(stub, rawOriginal);
-	const { originalMsgId, references, threadId: thread_id } = buildReferencesChain(originalEmail);
+	const {
+		originalMsgId,
+		references,
+		threadId: thread_id,
+	} = buildReferencesChain(originalEmail);
 
 	let toStr: string, fromEmail: string, fromDomain: string;
 	try {
 		({ toStr, fromEmail, fromDomain } = validateSender(to, from, mailboxId));
 	} catch (e) {
-		if (e instanceof SenderValidationError) return c.json({ error: e.message }, 400);
+		if (e instanceof SenderValidationError)
+			return c.json({ error: e.message }, 400);
 		throw e;
 	}
 
 	const { messageId, outgoingMessageId } = generateMessageId(fromDomain);
 
-	const rateLimitError = await (stub as unknown as RateLimitStub)
-		.checkSendRateLimit();
+	const rateLimitError = await (
+		stub as unknown as RateLimitStub
+	).checkSendRateLimit();
 	if (rateLimitError) {
 		return c.json({ error: rateLimitError }, 429);
 	}
 
-	const attachmentData = await storeAttachments(c.env.BUCKET, messageId, attachments);
+	const attachmentData = await storeAttachments(
+		c.env.BUCKET,
+		messageId,
+		attachments,
+	);
 
 	await stub.createEmail(
 		Folders.SENT,
@@ -63,7 +73,9 @@ export async function handleReplyEmail(c: AppContext) {
 			sender: fromEmail,
 			recipient: toStr,
 			cc: cc ? (Array.isArray(cc) ? cc.join(", ") : cc).toLowerCase() : null,
-			bcc: bcc ? (Array.isArray(bcc) ? bcc.join(", ") : bcc).toLowerCase() : null,
+			bcc: bcc
+				? (Array.isArray(bcc) ? bcc.join(", ") : bcc).toLowerCase()
+				: null,
 			date: new Date().toISOString(),
 			body: html || text || "",
 			in_reply_to: originalMsgId,
@@ -71,15 +83,32 @@ export async function handleReplyEmail(c: AppContext) {
 			thread_id: thread_id,
 			message_id: outgoingMessageId,
 			raw_headers: JSON.stringify([
-				{ key: "from", value: typeof from === "string" ? from : `${from.name} <${from.email}>` },
+				{
+					key: "from",
+					value:
+						typeof from === "string" ? from : `${from.name} <${from.email}>`,
+				},
 				{ key: "to", value: Array.isArray(to) ? to.join(", ") : to },
-				...(cc ? [{ key: "cc", value: Array.isArray(cc) ? cc.join(", ") : cc }] : []),
-				...(bcc ? [{ key: "bcc", value: Array.isArray(bcc) ? bcc.join(", ") : bcc }] : []),
+				...(cc
+					? [{ key: "cc", value: Array.isArray(cc) ? cc.join(", ") : cc }]
+					: []),
+				...(bcc
+					? [{ key: "bcc", value: Array.isArray(bcc) ? bcc.join(", ") : bcc }]
+					: []),
 				{ key: "subject", value: subject },
 				{ key: "date", value: new Date().toISOString() },
 				{ key: "message-id", value: `<${outgoingMessageId}>` },
-				...(originalMsgId ? [{ key: "in-reply-to", value: `<${originalMsgId}>` }] : []),
-				...(references.length > 0 ? [{ key: "references", value: references.map((r: string) => `<${r}>`).join(" ") }] : []),
+				...(originalMsgId
+					? [{ key: "in-reply-to", value: `<${originalMsgId}>` }]
+					: []),
+				...(references.length > 0
+					? [
+							{
+								key: "references",
+								value: references.map((r: string) => `<${r}>`).join(" "),
+							},
+						]
+					: []),
 			]),
 		},
 		attachmentData,
@@ -131,19 +160,25 @@ export async function handleForwardEmail(c: AppContext) {
 	try {
 		({ toStr, fromEmail, fromDomain } = validateSender(to, from, mailboxId));
 	} catch (e) {
-		if (e instanceof SenderValidationError) return c.json({ error: e.message }, 400);
+		if (e instanceof SenderValidationError)
+			return c.json({ error: e.message }, 400);
 		throw e;
 	}
 
 	const { messageId, outgoingMessageId } = generateMessageId(fromDomain);
 
-	const rateLimitError = await (stub as unknown as RateLimitStub)
-		.checkSendRateLimit();
+	const rateLimitError = await (
+		stub as unknown as RateLimitStub
+	).checkSendRateLimit();
 	if (rateLimitError) {
 		return c.json({ error: rateLimitError }, 429);
 	}
 
-	const attachmentData = await storeAttachments(c.env.BUCKET, messageId, attachments);
+	const attachmentData = await storeAttachments(
+		c.env.BUCKET,
+		messageId,
+		attachments,
+	);
 
 	await stub.createEmail(
 		Folders.SENT,
@@ -153,7 +188,9 @@ export async function handleForwardEmail(c: AppContext) {
 			sender: fromEmail,
 			recipient: toStr,
 			cc: cc ? (Array.isArray(cc) ? cc.join(", ") : cc).toLowerCase() : null,
-			bcc: bcc ? (Array.isArray(bcc) ? bcc.join(", ") : bcc).toLowerCase() : null,
+			bcc: bcc
+				? (Array.isArray(bcc) ? bcc.join(", ") : bcc).toLowerCase()
+				: null,
 			date: new Date().toISOString(),
 			body: html || text || "",
 			in_reply_to: null,
@@ -161,10 +198,18 @@ export async function handleForwardEmail(c: AppContext) {
 			thread_id: messageId,
 			message_id: outgoingMessageId,
 			raw_headers: JSON.stringify([
-				{ key: "from", value: typeof from === "string" ? from : `${from.name} <${from.email}>` },
+				{
+					key: "from",
+					value:
+						typeof from === "string" ? from : `${from.name} <${from.email}>`,
+				},
 				{ key: "to", value: Array.isArray(to) ? to.join(", ") : to },
-				...(cc ? [{ key: "cc", value: Array.isArray(cc) ? cc.join(", ") : cc }] : []),
-				...(bcc ? [{ key: "bcc", value: Array.isArray(bcc) ? bcc.join(", ") : bcc }] : []),
+				...(cc
+					? [{ key: "cc", value: Array.isArray(cc) ? cc.join(", ") : cc }]
+					: []),
+				...(bcc
+					? [{ key: "bcc", value: Array.isArray(bcc) ? bcc.join(", ") : bcc }]
+					: []),
 				{ key: "subject", value: subject },
 				{ key: "date", value: new Date().toISOString() },
 				{ key: "message-id", value: `<${outgoingMessageId}>` },

@@ -128,7 +128,12 @@ export async function toolDraftReply(
 		runVerifyDraft?: boolean;
 	},
 ): Promise<
-	| { status: "draft_saved"; draftId: string; message: string; draft: Record<string, string> }
+	| {
+			status: "draft_saved";
+			draftId: string;
+			message: string;
+			draft: Record<string, string>;
+	  }
 	| { error: string }
 > {
 	const stub = getMailboxStub(env, mailboxId);
@@ -138,7 +143,10 @@ export async function toolDraftReply(
 	if (params.runVerifyDraft) {
 		const sanitized = await verifyDraft(env.AI, processedBody);
 		if (!sanitized) {
-			return { error: "Draft verification failed — body could not be verified. Please try again." };
+			return {
+				error:
+					"Draft verification failed — body could not be verified. Please try again.",
+			};
 		}
 		processedBody = sanitized;
 	}
@@ -151,7 +159,9 @@ export async function toolDraftReply(
 	const draftId = crypto.randomUUID();
 
 	// Get the original email for thread_id and quoted text
-	const original = (await stub.getEmail(params.originalEmailId)) as EmailFull | null;
+	const original = (await stub.getEmail(
+		params.originalEmailId,
+	)) as EmailFull | null;
 	const threadId = original?.thread_id || params.originalEmailId;
 
 	// Append quoted original message
@@ -210,7 +220,13 @@ export async function toolDraftEmail(
 		thread_id?: string;
 	},
 ): Promise<
-	| { status: string; draftId: string; threadId?: string; message: string; draft?: Record<string, string> }
+	| {
+			status: string;
+			draftId: string;
+			threadId?: string;
+			message: string;
+			draft?: Record<string, string>;
+	  }
 	| { error: string }
 > {
 	const stub = getMailboxStub(env, mailboxId);
@@ -219,7 +235,10 @@ export async function toolDraftEmail(
 	if (params.runVerifyDraft) {
 		const sanitized = await verifyDraft(env.AI, processedBody);
 		if (!sanitized) {
-			return { error: "Draft verification failed — body could not be verified. Please try again." };
+			return {
+				error:
+					"Draft verification failed — body could not be verified. Please try again.",
+			};
 		}
 		processedBody = sanitized;
 	}
@@ -233,7 +252,9 @@ export async function toolDraftEmail(
 	// Resolve thread ID
 	let resolvedThreadId = params.thread_id;
 	if (!resolvedThreadId && params.in_reply_to) {
-		const original = (await stub.getEmail(params.in_reply_to)) as EmailFull | null;
+		const original = (await stub.getEmail(
+			params.in_reply_to,
+		)) as EmailFull | null;
 		resolvedThreadId = original?.thread_id || params.in_reply_to;
 	}
 	if (!resolvedThreadId) {
@@ -297,7 +318,10 @@ export async function toolUpdateDraft(
 	const verifiedBody = await verifyDraft(env.AI, rawBody);
 
 	if (!verifiedBody) {
-		return { error: "Draft verification failed — keeping existing draft unchanged. Please try again." };
+		return {
+			error:
+				"Draft verification failed — keeping existing draft unchanged. Please try again.",
+		};
 	}
 
 	await stub.deleteEmail(params.draftId);
@@ -400,23 +424,27 @@ export async function toolSendReply(
 		bodyHtml: string;
 	},
 ): Promise<
-	| { status: "sent"; messageId: string; message: string }
-	| { error: string }
+	{ status: "sent"; messageId: string; message: string } | { error: string }
 > {
 	const stub = getMailboxStub(env, mailboxId);
 
 	// Check send rate limit
-	const rateLimitError = await (stub as unknown as RateLimitStub).checkSendRateLimit();
+	const rateLimitError = await (
+		stub as unknown as RateLimitStub
+	).checkSendRateLimit();
 	if (rateLimitError) {
 		return { error: rateLimitError };
 	}
 
-	const originalEmail = (await stub.getEmail(params.originalEmailId)) as EmailFull | null;
+	const originalEmail = (await stub.getEmail(
+		params.originalEmailId,
+	)) as EmailFull | null;
 	if (!originalEmail) {
 		return { error: "Original email not found" };
 	}
 
-	const { originalMsgId, references, threadId } = buildReferencesChain(originalEmail);
+	const { originalMsgId, references, threadId } =
+		buildReferencesChain(originalEmail);
 	const fromDomain = mailboxId.split("@")[1];
 	if (!fromDomain) throw new Error("Invalid mailbox email address");
 	const { messageId, outgoingMessageId } = generateMessageId(fromDomain);
@@ -424,7 +452,10 @@ export async function toolSendReply(
 	// Verify and append quoted original message
 	const sanitizedBody = await verifyDraft(env.AI, params.bodyHtml);
 	if (!sanitizedBody) {
-		return { error: "Draft verification failed — refusing to send unverified content. Please try again." };
+		return {
+			error:
+				"Draft verification failed — refusing to send unverified content. Please try again.",
+		};
 	}
 	const quotedBlock = buildQuotedReplyBlock({
 		date: originalEmail.date,
@@ -478,13 +509,14 @@ export async function toolSendEmail(
 		bodyHtml: string;
 	},
 ): Promise<
-	| { status: "sent"; messageId: string; message: string }
-	| { error: string }
+	{ status: "sent"; messageId: string; message: string } | { error: string }
 > {
 	const stub = getMailboxStub(env, mailboxId);
 
 	// Check send rate limit
-	const rateLimitError = await (stub as unknown as RateLimitStub).checkSendRateLimit();
+	const rateLimitError = await (
+		stub as unknown as RateLimitStub
+	).checkSendRateLimit();
 	if (rateLimitError) {
 		return { error: rateLimitError };
 	}
@@ -495,7 +527,10 @@ export async function toolSendEmail(
 
 	const sanitizedBody = await verifyDraft(env.AI, params.bodyHtml);
 	if (!sanitizedBody) {
-		return { error: "Draft verification failed — refusing to send unverified content. Please try again." };
+		return {
+			error:
+				"Draft verification failed — refusing to send unverified content. Please try again.",
+		};
 	}
 
 	try {

@@ -3,7 +3,7 @@
 // NOTE: The storage key below is a hard-coded duplicate of THEME_STORAGE_KEY
 // in app/hooks/useThemeStore.ts — this file is served as a static asset and
 // cannot import app modules. Keep both in sync.
-(function () {
+(() => {
 	try {
 		var t = localStorage.getItem("agentic-inbox-theme");
 		if (t === "dark" || t === "light") {

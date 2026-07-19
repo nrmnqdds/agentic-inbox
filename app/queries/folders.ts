@@ -20,10 +20,7 @@ export function useFolders(mailboxId: string | undefined) {
 export function useCreateFolder() {
 	const qc = useQueryClient();
 	return useMutation({
-		mutationFn: ({
-			mailboxId,
-			name,
-		}: { mailboxId: string; name: string }) =>
+		mutationFn: ({ mailboxId, name }: { mailboxId: string; name: string }) =>
 			api.createFolder(mailboxId, name),
 		onSuccess: (_data, { mailboxId }) => {
 			qc.invalidateQueries({ queryKey: queryKeys.folders.list(mailboxId) });
@@ -38,8 +35,11 @@ export function useUpdateFolder() {
 			mailboxId,
 			id,
 			name,
-		}: { mailboxId: string; id: string; name: string }) =>
-			api.updateFolder(mailboxId, id, name),
+		}: {
+			mailboxId: string;
+			id: string;
+			name: string;
+		}) => api.updateFolder(mailboxId, id, name),
 		onSuccess: (_data, { mailboxId }) => {
 			qc.invalidateQueries({ queryKey: queryKeys.folders.list(mailboxId) });
 		},
@@ -49,10 +49,7 @@ export function useUpdateFolder() {
 export function useDeleteFolder() {
 	const qc = useQueryClient();
 	return useMutation({
-		mutationFn: ({
-			mailboxId,
-			id,
-		}: { mailboxId: string; id: string }) =>
+		mutationFn: ({ mailboxId, id }: { mailboxId: string; id: string }) =>
 			api.deleteFolder(mailboxId, id),
 		onSuccess: (_data, { mailboxId }) => {
 			qc.invalidateQueries({ queryKey: queryKeys.folders.list(mailboxId) });

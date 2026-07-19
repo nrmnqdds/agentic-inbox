@@ -85,7 +85,9 @@ export default function Sidebar() {
 
 	const customFolders = useMemo(
 		() =>
-			folders.filter((f) => !(SYSTEM_FOLDER_IDS as readonly string[]).includes(f.id)),
+			folders.filter(
+				(f) => !(SYSTEM_FOLDER_IDS as readonly string[]).includes(f.id),
+			),
 		[folders],
 	);
 

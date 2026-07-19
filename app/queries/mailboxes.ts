@@ -41,8 +41,10 @@ export function useUpdateMailbox() {
 		mutationFn: ({
 			mailboxId,
 			settings,
-		}: { mailboxId: string; settings: unknown }) =>
-			api.updateMailbox(mailboxId, settings),
+		}: {
+			mailboxId: string;
+			settings: unknown;
+		}) => api.updateMailbox(mailboxId, settings),
 		onSuccess: (_data, { mailboxId }) => {
 			qc.invalidateQueries({ queryKey: queryKeys.mailboxes.detail(mailboxId) });
 			qc.invalidateQueries({ queryKey: queryKeys.mailboxes.all });

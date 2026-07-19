@@ -3,9 +3,20 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 import { Button, Input, Tooltip } from "@cloudflare/kumo";
-import { GearSixIcon, ListIcon, MagnifyingGlassIcon, RobotIcon, XIcon } from "@phosphor-icons/react";
+import {
+	GearSixIcon,
+	ListIcon,
+	MagnifyingGlassIcon,
+	RobotIcon,
+	XIcon,
+} from "@phosphor-icons/react";
 import { type KeyboardEvent, useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router";
+import {
+	useLocation,
+	useNavigate,
+	useParams,
+	useSearchParams,
+} from "react-router";
 import { useUIStore } from "~/hooks/useUIStore";
 
 export default function Header() {
@@ -119,7 +130,11 @@ export default function Header() {
 			)}
 
 			<div className="flex items-center gap-1 ml-auto shrink-0">
-				<Tooltip content={isAgentPanelOpen ? "Hide agent panel" : "Show agent panel"} side="bottom" asChild>
+				<Tooltip
+					content={isAgentPanelOpen ? "Hide agent panel" : "Show agent panel"}
+					side="bottom"
+					asChild
+				>
 					<Button
 						variant={isAgentPanelOpen ? "secondary" : "ghost"}
 						shape="square"

@@ -66,7 +66,7 @@ export default function RichTextEditor({
 			// Place cursor at the start of the document (above quoted text)
 			const rafId = requestAnimationFrame(() => {
 				if (!editor.isDestroyed) {
-					editor.commands.focus('start');
+					editor.commands.focus("start");
 				}
 			});
 			return () => cancelAnimationFrame(rafId);

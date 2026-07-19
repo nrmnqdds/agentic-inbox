@@ -27,10 +27,7 @@ export function applyMigrations(
 
 	for (const migration of migrations) {
 		const applied = [
-			...sql.exec(
-				`SELECT 1 FROM d1_migrations WHERE name = ?`,
-				migration.name,
-			),
+			...sql.exec(`SELECT 1 FROM d1_migrations WHERE name = ?`, migration.name),
 		];
 		if (applied.length > 0) continue;
 
@@ -44,9 +41,7 @@ export function applyMigrations(
 		const escapedName = migration.name.replace(/'/g, "''");
 		const run = () => {
 			sql.exec(migrationSql);
-			sql.exec(
-				`INSERT INTO d1_migrations (name) VALUES ('${escapedName}')`,
-			);
+			sql.exec(`INSERT INTO d1_migrations (name) VALUES ('${escapedName}')`);
 		};
 
 		if (storage) {
@@ -136,7 +131,9 @@ export const mailboxMigrations: Migration[] = [
 	},
 	{
 		name: "3_add_draft_folder",
-		sql: txn(`INSERT INTO folders (id, name, is_deletable) VALUES ('draft', 'Drafts', 0);`),
+		sql: txn(
+			`INSERT INTO folders (id, name, is_deletable) VALUES ('draft', 'Drafts', 0);`,
+		),
 	},
 	{
 		name: "4_add_message_id",
@@ -148,7 +145,9 @@ export const mailboxMigrations: Migration[] = [
 	},
 	{
 		name: "6_mark_sent_emails_as_read",
-		sql: txn(`UPDATE emails SET read = 1 WHERE folder_id = 'sent' AND read = 0;`),
+		sql: txn(
+			`UPDATE emails SET read = 1 WHERE folder_id = 'sent' AND read = 0;`,
+		),
 	},
 	{
 		name: "7_add_cc_bcc",

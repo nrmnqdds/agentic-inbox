@@ -2,7 +2,13 @@
 // Licensed under the Apache 2.0 license found in the LICENSE file or at:
 //     https://opensource.org/licenses/Apache-2.0
 
-import { Badge, Button, Input, Loader, useKumoToastManager } from "@cloudflare/kumo";
+import {
+	Badge,
+	Button,
+	Input,
+	Loader,
+	useKumoToastManager,
+} from "@cloudflare/kumo";
 import {
 	ArrowCounterClockwiseIcon,
 	MoonIcon,
@@ -86,8 +92,8 @@ export default function SettingsRoute() {
 						</span>
 					</div>
 					<p className="text-xs text-kumo-subtle mb-3">
-						Choose how Agentic Inbox looks. Applies instantly — no save
-						needed, and separate from the mailbox settings below.
+						Choose how Agentic Inbox looks. Applies instantly — no save needed,
+						and separate from the mailbox settings below.
 					</p>
 					<div className="flex gap-2">
 						<Button
@@ -130,7 +136,11 @@ export default function SettingsRoute() {
 				<div className="rounded-lg border border-kumo-line bg-kumo-base p-5">
 					<div className="flex items-center justify-between mb-4">
 						<div className="flex items-center gap-2">
-							<RobotIcon size={16} weight="duotone" className="text-kumo-subtle" />
+							<RobotIcon
+								size={16}
+								weight="duotone"
+								className="text-kumo-subtle"
+							/>
 							<span className="text-sm font-medium text-kumo-default">
 								AI Agent Prompt
 							</span>
@@ -152,8 +162,8 @@ export default function SettingsRoute() {
 						)}
 					</div>
 					<p className="text-xs text-kumo-subtle mb-3">
-						Customize how the AI agent behaves for this mailbox.
-						Leave empty to use the built-in default prompt.
+						Customize how the AI agent behaves for this mailbox. Leave empty to
+						use the built-in default prompt.
 					</p>
 					<textarea
 						value={agentPrompt}
@@ -163,8 +173,8 @@ export default function SettingsRoute() {
 						className="w-full resize-y rounded-lg border border-kumo-line bg-kumo-recessed px-3 py-2 text-xs text-kumo-default placeholder:text-kumo-subtle focus:outline-none focus:ring-1 focus:ring-kumo-ring font-mono leading-relaxed"
 					/>
 					<p className="text-xs text-kumo-subtle mt-2">
-						The prompt is sent as the system message to the AI model.
-						It controls the agent's personality, writing style, and behavior rules.
+						The prompt is sent as the system message to the AI model. It
+						controls the agent's personality, writing style, and behavior rules.
 					</p>
 				</div>
 
