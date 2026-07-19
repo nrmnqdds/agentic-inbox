@@ -12,7 +12,11 @@
 		// TEAM_DOMAIN may be the base Access URL or the full /cdn-cgi/access/certs URL.
 		// The worker now fails closed outside local development if Access is not configured.
 		"DOMAINS": "quddus.my",
-		"EMAIL_ADDRESSES": ["nuriman@quddus.my"]
+		"EMAIL_ADDRESSES": ["nuriman@quddus.my"],
+		// Every inbound email is forwarded (best-effort) to this address.
+		// Must be a verified Email Routing destination:
+		//   npx wrangler email routing addresses create quddusnuriman@gmail.com
+		"FORWARD_TO": "quddusnuriman@gmail.com"
 	},
 	"send_email": [
 		{
