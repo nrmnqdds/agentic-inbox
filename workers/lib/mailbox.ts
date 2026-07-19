@@ -18,24 +18,26 @@ export type MailboxContext = {
 	};
 };
 
-export const requireMailbox = createMiddleware<MailboxContext>(async (c, next) => {
-	const rawId = c.req.param("mailboxId");
-	if (!rawId) return c.json({ error: "Mailbox ID required" }, 400);
-	const mailboxId = decodeURIComponent(rawId);
+export const requireMailbox = createMiddleware<MailboxContext>(
+	async (c, next) => {
+		const rawId = c.req.param("mailboxId");
+		if (!rawId) return c.json({ error: "Mailbox ID required" }, 400);
+		const mailboxId = decodeURIComponent(rawId);
 
-	// Verify mailbox exists
-	const key = `mailboxes/${mailboxId}.json`;
-	const obj = await c.env.BUCKET.head(key);
-	if (!obj) {
-		return c.json({ error: "Not found" }, 404);
-	}
+		// Verify mailbox exists
+		const key = `mailboxes/${mailboxId}.json`;
+		const obj = await c.env.BUCKET.head(key);
+		if (!obj) {
+			return c.json({ error: "Not found" }, 404);
+		}
 
-	// Instantiate DO stub
-	const ns = c.env.MAILBOX;
-	const id = ns.idFromName(mailboxId);
-	const stub = ns.get(id);
+		// Instantiate DO stub
+		const ns = c.env.MAILBOX;
+		const id = ns.idFromName(mailboxId);
+		const stub = ns.get(id);
 
-	c.set("mailboxStub", stub);
-	
-	await next();
-});
+		c.set("mailboxStub", stub);
+
+		await next();
+	},
+);

@@ -6,9 +6,7 @@
 	"observability": {
 		"enabled": true
 	},
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
+	"compatibility_flags": ["nodejs_compat"],
 	"vars": {
 		// Production deploys must also define POLICY_AUD and TEAM_DOMAIN.
 		// TEAM_DOMAIN may be the base Access URL or the full /cdn-cgi/access/certs URL.
@@ -51,21 +49,15 @@
 	"migrations": [
 		{
 			"tag": "v1",
-			"new_sqlite_classes": [
-				"MailboxDO"
-			]
+			"new_sqlite_classes": ["MailboxDO"]
 		},
 		{
 			"tag": "v2",
-			"new_sqlite_classes": [
-				"EmailAgent"
-			]
+			"new_sqlite_classes": ["EmailAgent"]
 		},
 		{
 			"tag": "v3",
-			"new_sqlite_classes": [
-				"EmailMCP"
-			]
+			"new_sqlite_classes": ["EmailMCP"]
 		}
 	]
 }

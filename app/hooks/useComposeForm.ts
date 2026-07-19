@@ -14,7 +14,13 @@ import {
 	stripHtml,
 	toEmailListValue,
 } from "~/lib/utils";
-import { useDeleteEmail, useForwardEmail, useReplyToEmail, useSaveDraft, useSendEmail } from "~/queries/emails";
+import {
+	useDeleteEmail,
+	useForwardEmail,
+	useReplyToEmail,
+	useSaveDraft,
+	useSendEmail,
+} from "~/queries/emails";
 import { useMailbox } from "~/queries/mailboxes";
 import { useUIStore } from "~/hooks/useUIStore";
 
@@ -60,18 +66,25 @@ function getPrefixedSubject(subject: string, prefix: "Re" | "Fwd") {
 }
 
 function buildForwardBody(
-	original: NonNullable<ReturnType<typeof useUIStore.getState>["composeOptions"]["originalEmail"]>,
+	original: NonNullable<
+		ReturnType<typeof useUIStore.getState>["composeOptions"]["originalEmail"]
+	>,
 	sigBlock: string,
 ) {
 	const safeSender = escapeHtml(original.sender);
 	const safeSubject = escapeHtml(original.subject);
-	const safeBody = escapeHtml(stripHtml(original.body || "")).replace(/\n/g, "<br>");
+	const safeBody = escapeHtml(stripHtml(original.body || "")).replace(
+		/\n/g,
+		"<br>",
+	);
 
 	return `<p><br></p>${sigBlock ? `${sigBlock}<br>` : ""}<div style="border: 1px solid #ddd; padding: 1em; background-color: #f9f9f9; margin: 1em 0;"><strong>Forwarded message:</strong><br><strong>From:</strong> ${safeSender}<br><strong>Date:</strong> ${formatComposeDate(original.date)}<br><strong>Subject:</strong> ${safeSubject}<br><br>${safeBody}</div>`;
 }
 
 function buildReplyAllFields(
-	original: NonNullable<ReturnType<typeof useUIStore.getState>["composeOptions"]["originalEmail"]>,
+	original: NonNullable<
+		ReturnType<typeof useUIStore.getState>["composeOptions"]["originalEmail"]
+	>,
 	selfAddress?: string,
 ) {
 	const toRecipients: string[] = [];
@@ -139,7 +152,10 @@ function buildInitialComposeFields(
 	}
 
 	if (mode === "reply-all") {
-		const recipients = buildReplyAllFields(original, mailboxEmail?.toLowerCase());
+		const recipients = buildReplyAllFields(
+			original,
+			mailboxEmail?.toLowerCase(),
+		);
 		return {
 			...EMPTY_FIELDS,
 			...recipients,
@@ -186,10 +202,22 @@ export function useComposeForm(mailboxId?: string, _folder?: string) {
 
 	const formTitle = useMemo(() => {
 		if (isDraftEdit) return "Edit Draft";
-		switch (composeOptions.mode) { case "reply": return "Reply"; case "reply-all": return "Reply All"; case "forward": return "Forward"; default: return "New Message"; }
+		switch (composeOptions.mode) {
+			case "reply":
+				return "Reply";
+			case "reply-all":
+				return "Reply All";
+			case "forward":
+				return "Forward";
+			default:
+				return "New Message";
+		}
 	}, [composeOptions.mode, isDraftEdit]);
 
-	const sigBlock = useMemo(() => getSignatureBlock(currentMailbox?.settings), [currentMailbox]);
+	const sigBlock = useMemo(
+		() => getSignatureBlock(currentMailbox?.settings),
+		[currentMailbox],
+	);
 
 	useEffect(() => {
 		if (lastInitializedOptionsRef.current === composeOptions) return;
@@ -210,36 +238,60 @@ export function useComposeForm(mailboxId?: string, _folder?: string) {
 	}, [composeOptions, currentMailbox?.email, sigBlock]);
 
 	const handleSaveDraft = async () => {
-		if (!mailboxId || isSending) return; setIsSavingDraft(true); setError(null);
+		if (!mailboxId || isSending) return;
+		setIsSavingDraft(true);
+		setError(null);
 		try {
-			await saveDraftMutation.mutateAsync({ mailboxId, draft: {
-				to,
-				cc: cc || undefined,
-				bcc: bcc || undefined,
-				subject,
-				body,
-				in_reply_to: composeOptions.originalEmail?.id || composeOptions.draftEmail?.in_reply_to || undefined,
-				thread_id: composeOptions.originalEmail?.thread_id || composeOptions.draftEmail?.thread_id || undefined,
-				draft_id: composeOptions.draftEmail?.id || undefined,
-			} });
+			await saveDraftMutation.mutateAsync({
+				mailboxId,
+				draft: {
+					to,
+					cc: cc || undefined,
+					bcc: bcc || undefined,
+					subject,
+					body,
+					in_reply_to:
+						composeOptions.originalEmail?.id ||
+						composeOptions.draftEmail?.in_reply_to ||
+						undefined,
+					thread_id:
+						composeOptions.originalEmail?.thread_id ||
+						composeOptions.draftEmail?.thread_id ||
+						undefined,
+					draft_id: composeOptions.draftEmail?.id || undefined,
+				},
+			});
 			toastManager.add({ title: "Draft saved!" });
-		}
-		catch (err: unknown) {
-			const message = (err instanceof Error ? err.message : null) || "Failed to save draft.";
+		} catch (err: unknown) {
+			const message =
+				(err instanceof Error ? err.message : null) || "Failed to save draft.";
 			setError(message);
 			toastManager.add({ title: message, variant: "error" });
+		} finally {
+			setIsSavingDraft(false);
 		}
-		finally { setIsSavingDraft(false); }
 	};
 
 	const handleSend = async (e: FormEvent, onClose: () => void) => {
-		e.preventDefault(); if (isSending) return; setError(null);
-		if (!currentMailbox || !mailboxId) { setError("No mailbox selected."); return; }
+		e.preventDefault();
+		if (isSending) return;
+		setError(null);
+		if (!currentMailbox || !mailboxId) {
+			setError("No mailbox selected.");
+			return;
+		}
 		const toRecipients = splitEmailList(to);
-		if (toRecipients.length === 0) { setError("Add at least one recipient."); return; }
-		const ccRecipients = splitEmailList(cc); const bccRecipients = splitEmailList(bcc);
+		if (toRecipients.length === 0) {
+			setError("Add at least one recipient.");
+			return;
+		}
+		const ccRecipients = splitEmailList(cc);
+		const bccRecipients = splitEmailList(bcc);
 		const fromName = currentMailbox.settings?.fromName || currentMailbox.name;
-		const from = fromName && fromName !== currentMailbox.email ? { email: currentMailbox.email, name: fromName } : currentMailbox.email;
+		const from =
+			fromName && fromName !== currentMailbox.email
+				? { email: currentMailbox.email, name: fromName }
+				: currentMailbox.email;
 		const emailData = {
 			to: toEmailListValue(toRecipients),
 			cc: toEmailListValue(ccRecipients),
@@ -249,18 +301,61 @@ export function useComposeForm(mailboxId?: string, _folder?: string) {
 			html: body,
 			text: htmlToPlainText(body),
 		};
-		const draftId = composeOptions.draftEmail?.id; const mode = composeOptions.mode; const originalId = composeOptions.originalEmail?.id || composeOptions.draftEmail?.in_reply_to;
-		setIsSending(true); toastManager.add({ title: "Sending email..." });
+		const draftId = composeOptions.draftEmail?.id;
+		const mode = composeOptions.mode;
+		const originalId =
+			composeOptions.originalEmail?.id ||
+			composeOptions.draftEmail?.in_reply_to;
+		setIsSending(true);
+		toastManager.add({ title: "Sending email..." });
 		try {
-			if ((mode === "reply" || mode === "reply-all") && originalId) await replyMutation.mutateAsync({ mailboxId, emailId: originalId, email: emailData });
-			else if (mode === "forward" && originalId) await forwardMutation.mutateAsync({ mailboxId, emailId: originalId, email: emailData });
+			if ((mode === "reply" || mode === "reply-all") && originalId)
+				await replyMutation.mutateAsync({
+					mailboxId,
+					emailId: originalId,
+					email: emailData,
+				});
+			else if (mode === "forward" && originalId)
+				await forwardMutation.mutateAsync({
+					mailboxId,
+					emailId: originalId,
+					email: emailData,
+				});
 			else await sendEmailMutation.mutateAsync({ mailboxId, email: emailData });
 			if (draftId) deleteEmailMutation.mutate({ mailboxId, id: draftId });
 			toastManager.add({ title: "Email sent!" });
 			onClose();
-		} catch (err: unknown) { const message = (err instanceof Error ? err.message : null) || "Failed to send email."; setError(message); toastManager.add({ title: message, variant: "error" }); }
-		finally { setIsSending(false); }
+		} catch (err: unknown) {
+			const message =
+				(err instanceof Error ? err.message : null) || "Failed to send email.";
+			setError(message);
+			toastManager.add({ title: message, variant: "error" });
+		} finally {
+			setIsSending(false);
+		}
 	};
 
-	return { to, setTo, cc, setCc, bcc, setBcc, showCcBcc, setShowCcBcc, subject, setSubject, body, setBody, error, setError, isSavingDraft, isSending, formTitle, handleSaveDraft, handleSend, closeCompose, closePanel };
+	return {
+		to,
+		setTo,
+		cc,
+		setCc,
+		bcc,
+		setBcc,
+		showCcBcc,
+		setShowCcBcc,
+		subject,
+		setSubject,
+		body,
+		setBody,
+		error,
+		setError,
+		isSavingDraft,
+		isSending,
+		formTitle,
+		handleSaveDraft,
+		handleSend,
+		closeCompose,
+		closePanel,
+	};
 }

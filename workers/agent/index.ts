@@ -29,7 +29,11 @@ import {
 	toolMoveEmail,
 	toolDiscardDraft,
 } from "../lib/tools";
-import { Folders, FOLDER_TOOL_DESCRIPTION, MOVE_FOLDER_TOOL_DESCRIPTION } from "../../shared/folders";
+import {
+	Folders,
+	FOLDER_TOOL_DESCRIPTION,
+	MOVE_FOLDER_TOOL_DESCRIPTION,
+} from "../../shared/folders";
 import type { Env } from "../types";
 
 // AI SDK v6 changed tool() overloads significantly. We define tools as plain
@@ -97,7 +101,10 @@ async function getSystemPrompt(env: Env, mailboxId: string): Promise<string> {
 		const obj = await env.BUCKET.get(key);
 		if (obj) {
 			const settings = await obj.json<Record<string, unknown>>();
-			if (typeof settings.agentSystemPrompt === "string" && settings.agentSystemPrompt.trim()) {
+			if (
+				typeof settings.agentSystemPrompt === "string" &&
+				settings.agentSystemPrompt.trim()
+			) {
 				return settings.agentSystemPrompt;
 			}
 		}
@@ -121,10 +128,7 @@ function createEmailTools(env: Env, mailboxId: string) {
 					.number()
 					.default(20)
 					.describe("Maximum number of emails to return"),
-				page: z
-					.number()
-					.default(1)
-					.describe("Page number for pagination"),
+				page: z.number().default(1).describe("Page number for pagination"),
 			}),
 			execute: async ({ folder, limit, page }): Promise<unknown> => {
 				return toolListEmails(env, mailboxId, { folder, limit, page });
@@ -163,9 +167,7 @@ function createEmailTools(env: Env, mailboxId: string) {
 			parameters: z.object({
 				query: z
 					.string()
-					.describe(
-						"Search query to match against subject and body",
-					),
+					.describe("Search query to match against subject and body"),
 				folder: z
 					.string()
 					.optional()
@@ -181,9 +183,7 @@ function createEmailTools(env: Env, mailboxId: string) {
 				"Draft a new email (not a reply) and save it to the Drafts folder. This does NOT send — it saves a draft for the operator to review. Use this for composing new outbound emails. Write the body as plain text — no HTML tags.",
 			parameters: z.object({
 				to: z.string().email().describe("Recipient email address"),
-				subject: z
-					.string()
-					.describe("Subject line"),
+				subject: z.string().describe("Subject line"),
 				body: z
 					.string()
 					.describe(
@@ -208,16 +208,19 @@ function createEmailTools(env: Env, mailboxId: string) {
 					.string()
 					.describe("The ID of the email being replied to"),
 				to: z.string().email().describe("Recipient email address"),
-				subject: z
-					.string()
-					.describe("Subject line (usually 'Re: ...')"),
+				subject: z.string().describe("Subject line (usually 'Re: ...')"),
 				body: z
 					.string()
 					.describe(
 						"The plain text body of the reply. No HTML — just write normally.",
 					),
 			}),
-			execute: async ({ originalEmailId, to, subject, body }): Promise<unknown> => {
+			execute: async ({
+				originalEmailId,
+				to,
+				subject,
+				body,
+			}): Promise<unknown> => {
 				return toolDraftReply(env, mailboxId, {
 					originalEmailId,
 					to,
@@ -233,9 +236,7 @@ function createEmailTools(env: Env, mailboxId: string) {
 			description: "Mark an email as read or unread.",
 			parameters: z.object({
 				emailId: z.string().describe("The email ID"),
-				read: z
-					.boolean()
-					.describe("true to mark as read, false for unread"),
+				read: z.boolean().describe("true to mark as read, false for unread"),
 			}),
 			execute: async ({ emailId, read }): Promise<unknown> => {
 				return toolMarkEmailRead(env, mailboxId, emailId, read);
@@ -247,9 +248,7 @@ function createEmailTools(env: Env, mailboxId: string) {
 				"Move an email to a different folder (inbox, sent, draft, archive, trash).",
 			parameters: z.object({
 				emailId: z.string().describe("The email ID"),
-				folderId: z
-					.string()
-					.describe(MOVE_FOLDER_TOOL_DESCRIPTION),
+				folderId: z.string().describe(MOVE_FOLDER_TOOL_DESCRIPTION),
 			}),
 			execute: async ({ emailId, folderId }): Promise<unknown> => {
 				return toolMoveEmail(env, mailboxId, emailId, folderId);
@@ -300,7 +299,7 @@ export class EmailAgent extends AIChatAgent<any> {
 		const url = new URL(request.url);
 		if (url.pathname === "/onNewEmail" && request.method === "POST") {
 			try {
-				const emailData = await request.json() as {
+				const emailData = (await request.json()) as {
 					mailboxId: string;
 					emailId: string;
 					sender: string;
@@ -313,10 +312,10 @@ export class EmailAgent extends AIChatAgent<any> {
 				});
 			} catch (e) {
 				console.error("onNewEmail handler failed:", (e as Error).message);
-				return new Response(
-					JSON.stringify({ error: (e as Error).message }),
-					{ status: 500, headers: { "Content-Type": "application/json" } },
-				);
+				return new Response(JSON.stringify({ error: (e as Error).message }), {
+					status: 500,
+					headers: { "Content-Type": "application/json" },
+				});
 			}
 		}
 		return super.onRequest(request);
@@ -345,12 +344,17 @@ export class EmailAgent extends AIChatAgent<any> {
 		let emailBody = "";
 		let threadContext = "";
 		try {
-			const email = (await stub.getEmail(emailData.emailId)) as EmailFull | null;
+			const email = (await stub.getEmail(
+				emailData.emailId,
+			)) as EmailFull | null;
 			if (email?.body) {
 				const isInjection = await isPromptInjection(env.AI, email.body);
 				if (isInjection) {
-					console.warn("Skipping auto-draft due to detected prompt injection:", emailData.emailId);
-					
+					console.warn(
+						"Skipping auto-draft due to detected prompt injection:",
+						emailData.emailId,
+					);
+
 					// Log to agent chat so the user knows why it skipped
 					const newMessages = [
 						{
@@ -358,69 +362,115 @@ export class EmailAgent extends AIChatAgent<any> {
 							role: "user" as const,
 							content: `[Auto-triggered] New email from ${emailData.sender}: "${emailData.subject}"`,
 							createdAt: new Date(),
-							parts: [{ type: "text" as const, text: `[Auto-triggered] New email from ${emailData.sender}: "${emailData.subject}"` }],
+							parts: [
+								{
+									type: "text" as const,
+									text: `[Auto-triggered] New email from ${emailData.sender}: "${emailData.subject}"`,
+								},
+							],
 						},
 						{
 							id: crypto.randomUUID(),
 							role: "assistant" as const,
-							content: "⚠️ Blocked auto-draft creation: the email appears to contain prompt injection or malicious instructions.",
+							content:
+								"⚠️ Blocked auto-draft creation: the email appears to contain prompt injection or malicious instructions.",
 							createdAt: new Date(),
-							parts: [{ type: "text" as const, text: "⚠️ Blocked auto-draft creation: the email appears to contain prompt injection or malicious instructions." }],
+							parts: [
+								{
+									type: "text" as const,
+									text: "⚠️ Blocked auto-draft creation: the email appears to contain prompt injection or malicious instructions.",
+								},
+							],
 						},
 					];
 					await this.persistMessages([...this.messages, ...newMessages]);
-					
+
 					return;
 				}
-				
+
 				emailBody = stripHtmlToText(email.body);
 			}
 
-		// Load thread for conversation context
-		const threadEmails = (await stub.getEmails({ thread_id: emailData.threadId })) as EmailMetadata[];
-		if (threadEmails.length > 1) {
-			const fullThread = await Promise.all(
-				threadEmails.map(async (e) => {
-					const full = (await stub.getEmail(e.id)) as EmailFull | null;
-					const text = full?.body ? stripHtmlToText(full.body) : "";
-					return { id: e.id, sender: e.sender, recipient: e.recipient, subject: e.subject, date: e.date, folder_id: e.folder_id, body_text: text };
-				}),
-			);
-			fullThread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-			threadContext = fullThread
-				.map((e) => `[${e.date}] ${e.sender} → ${e.recipient} (${e.folder_id}): ${e.body_text.substring(0, 500)}`)
-				.join("\n\n");
+			// Load thread for conversation context
+			const threadEmails = (await stub.getEmails({
+				thread_id: emailData.threadId,
+			})) as EmailMetadata[];
+			if (threadEmails.length > 1) {
+				const fullThread = await Promise.all(
+					threadEmails.map(async (e) => {
+						const full = (await stub.getEmail(e.id)) as EmailFull | null;
+						const text = full?.body ? stripHtmlToText(full.body) : "";
+						return {
+							id: e.id,
+							sender: e.sender,
+							recipient: e.recipient,
+							subject: e.subject,
+							date: e.date,
+							folder_id: e.folder_id,
+							body_text: text,
+						};
+					}),
+				);
+				fullThread.sort(
+					(a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+				);
+				threadContext = fullThread
+					.map(
+						(e) =>
+							`[${e.date}] ${e.sender} → ${e.recipient} (${e.folder_id}): ${e.body_text.substring(0, 500)}`,
+					)
+					.join("\n\n");
 
-			// Scan thread context for prompt injection too -- an attacker
-			// could plant an injection in an earlier email in the thread
-			// that gets included in the agent's prompt.
-			if (threadContext) {
-				const threadInjection = await isPromptInjection(env.AI, threadContext);
-				if (threadInjection) {
-					console.warn("Skipping auto-draft due to prompt injection in thread context:", emailData.threadId);
-					const newMessages = [
-						{
-							id: crypto.randomUUID(),
-							role: "user" as const,
-							content: `[Auto-triggered] New email from ${emailData.sender}: "${emailData.subject}"`,
-							createdAt: new Date(),
-							parts: [{ type: "text" as const, text: `[Auto-triggered] New email from ${emailData.sender}: "${emailData.subject}"` }],
-						},
-						{
-							id: crypto.randomUUID(),
-							role: "assistant" as const,
-							content: "Blocked auto-draft creation: the thread context appears to contain prompt injection or malicious instructions.",
-							createdAt: new Date(),
-							parts: [{ type: "text" as const, text: "Blocked auto-draft creation: the thread context appears to contain prompt injection or malicious instructions." }],
-						},
-					];
-					await this.persistMessages([...this.messages, ...newMessages]);
-					return;
+				// Scan thread context for prompt injection too -- an attacker
+				// could plant an injection in an earlier email in the thread
+				// that gets included in the agent's prompt.
+				if (threadContext) {
+					const threadInjection = await isPromptInjection(
+						env.AI,
+						threadContext,
+					);
+					if (threadInjection) {
+						console.warn(
+							"Skipping auto-draft due to prompt injection in thread context:",
+							emailData.threadId,
+						);
+						const newMessages = [
+							{
+								id: crypto.randomUUID(),
+								role: "user" as const,
+								content: `[Auto-triggered] New email from ${emailData.sender}: "${emailData.subject}"`,
+								createdAt: new Date(),
+								parts: [
+									{
+										type: "text" as const,
+										text: `[Auto-triggered] New email from ${emailData.sender}: "${emailData.subject}"`,
+									},
+								],
+							},
+							{
+								id: crypto.randomUUID(),
+								role: "assistant" as const,
+								content:
+									"Blocked auto-draft creation: the thread context appears to contain prompt injection or malicious instructions.",
+								createdAt: new Date(),
+								parts: [
+									{
+										type: "text" as const,
+										text: "Blocked auto-draft creation: the thread context appears to contain prompt injection or malicious instructions.",
+									},
+								],
+							},
+						];
+						await this.persistMessages([...this.messages, ...newMessages]);
+						return;
+					}
 				}
 			}
-		}
 		} catch (e) {
-			console.warn("Pre-read failed, agent will use tools:", (e as Error).message);
+			console.warn(
+				"Pre-read failed, agent will use tools:",
+				(e as Error).message,
+			);
 		}
 
 		let autoPrompt = `A new email just arrived. Draft an appropriate response using draft_reply.
@@ -473,7 +523,10 @@ Based on the email content and thread context above, draft a reply using draft_r
 			// Check if draft_reply was called (saves to Drafts as side effect).
 			// If NOT, save the agent's text response as a draft directly.
 			const draftToolCalled = result.steps.some((step) =>
-				step.toolCalls.some((tc) => tc.toolName === "draft_reply" || tc.toolName === "draft_email"),
+				step.toolCalls.some(
+					(tc) =>
+						tc.toolName === "draft_reply" || tc.toolName === "draft_email",
+				),
 			);
 
 			if (!draftToolCalled && result.text.trim()) {
@@ -495,12 +548,12 @@ Based on the email content and thread context above, draft a reply using draft_r
 							sender: emailData.mailboxId.toLowerCase(),
 							recipient: emailData.sender.toLowerCase(),
 							date: new Date().toISOString(),
-						// verifyDraft may return plain text or HTML depending on its
-						// code path. Only wrap in textToHtml if it's plain text.
-						body: /<[a-z][\s\S]*>/i.test(sanitizedText)
-							? sanitizedText
-							: textToHtml(sanitizedText),
-						in_reply_to: emailData.emailId,
+							// verifyDraft may return plain text or HTML depending on its
+							// code path. Only wrap in textToHtml if it's plain text.
+							body: /<[a-z][\s\S]*>/i.test(sanitizedText)
+								? sanitizedText
+								: textToHtml(sanitizedText),
+							in_reply_to: emailData.emailId,
 							email_references: null,
 							thread_id: emailData.threadId,
 						},
@@ -513,7 +566,7 @@ Based on the email content and thread context above, draft a reply using draft_r
 			// Persist the conversation into the agent's chat history
 			// If it called the tool, we just log a simple success message so the chat isn't cluttered
 			// with conversational slop.
-			const assistantText = draftToolCalled 
+			const assistantText = draftToolCalled
 				? `Created draft reply to ${emailData.sender}.`
 				: result.text;
 

@@ -57,7 +57,8 @@ export const useUIStore = create<UIState>((set, get) => ({
 	startCompose: (options) =>
 		set((state) => {
 			const mode = options?.mode || "new";
-			const isReplyOrForward = mode === "reply" || mode === "reply-all" || mode === "forward";
+			const isReplyOrForward =
+				mode === "reply" || mode === "reply-all" || mode === "forward";
 			return {
 				isComposing: true,
 				_previousEmailId: state.selectedEmailId,
@@ -68,7 +69,13 @@ export const useUIStore = create<UIState>((set, get) => ({
 			};
 		}),
 
-	closePanel: () => set({ selectedEmailId: null, isComposing: false, _previousEmailId: null, composeOptions: { mode: "new" as const, originalEmail: null } }),
+	closePanel: () =>
+		set({
+			selectedEmailId: null,
+			isComposing: false,
+			_previousEmailId: null,
+			composeOptions: { mode: "new" as const, originalEmail: null },
+		}),
 
 	closeCompose: () =>
 		set((state) => ({

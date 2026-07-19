@@ -118,7 +118,11 @@ export default {
 		try {
 			await receiveEmail(event, env, ctx);
 		} catch (e) {
-			console.error("Failed to process incoming email:", (e as Error).message, (e as Error).stack);
+			console.error(
+				"Failed to process incoming email:",
+				(e as Error).message,
+				(e as Error).stack,
+			);
 			// Re-throw so Cloudflare's email routing can retry delivery or bounce the message.
 			// Swallowing the error would silently drop the email.
 			throw e;

@@ -37,7 +37,15 @@ interface ThreadMessageProps {
 	onPreviewImage?: (url: string, filename: string) => void;
 }
 
-function Avatar({ isDraft, isSelf, sender }: { isDraft?: boolean; isSelf: boolean; sender: string }) {
+function Avatar({
+	isDraft,
+	isSelf,
+	sender,
+}: {
+	isDraft?: boolean;
+	isSelf: boolean;
+	sender: string;
+}) {
 	return (
 		<div
 			className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
@@ -112,7 +120,11 @@ export default function ThreadMessage({
 							aria-label="Collapse message"
 						>
 							<div className="cursor-pointer hover:ring-2 hover:ring-kumo-brand/30 transition-shadow rounded-full">
-								<Avatar isDraft={isDraft} isSelf={isSelf} sender={email.sender} />
+								<Avatar
+									isDraft={isDraft}
+									isSelf={isSelf}
+									sender={email.sender}
+								/>
 							</div>
 						</button>
 						<div className="min-w-0">
@@ -122,7 +134,9 @@ export default function ThreadMessage({
 								</span>
 								{isDraft && <Badge variant="outline">Draft</Badge>}
 							</div>
-							<div className="text-xs text-kumo-subtle">To: {email.recipient}</div>
+							<div className="text-xs text-kumo-subtle">
+								To: {email.recipient}
+							</div>
 						</div>
 					</div>
 					<div className="flex items-center gap-1 shrink-0">

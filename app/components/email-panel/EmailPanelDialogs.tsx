@@ -46,8 +46,10 @@ function getSourceHeaders(msg: Email): { key: string; value: string }[] {
 	if (msg.bcc) headers.push({ key: "Bcc", value: msg.bcc });
 	if (msg.subject) headers.push({ key: "Subject", value: msg.subject });
 	if (msg.date) headers.push({ key: "Date", value: msg.date });
-	if (msg.message_id) headers.push({ key: "Message-ID", value: msg.message_id });
-	if (msg.in_reply_to) headers.push({ key: "In-Reply-To", value: msg.in_reply_to });
+	if (msg.message_id)
+		headers.push({ key: "Message-ID", value: msg.message_id });
+	if (msg.in_reply_to)
+		headers.push({ key: "In-Reply-To", value: msg.in_reply_to });
 	if (msg.email_references) {
 		headers.push({ key: "References", value: msg.email_references });
 	}
@@ -61,7 +63,9 @@ export default function EmailPanelDialogs({
 	onCloseSource,
 	onClosePreview,
 }: EmailPanelDialogsProps) {
-	const sourceHeaders = sourceViewEmail ? getSourceHeaders(sourceViewEmail) : [];
+	const sourceHeaders = sourceViewEmail
+		? getSourceHeaders(sourceViewEmail)
+		: [];
 
 	return (
 		<>

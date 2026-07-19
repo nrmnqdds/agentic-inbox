@@ -61,7 +61,9 @@ const TOOLS = [
 export default function MCPPanel() {
 	const { mailboxId } = useParams<{ mailboxId: string }>();
 	const baseUrl =
-		typeof window !== "undefined" ? window.location.origin : "https://your-app.workers.dev";
+		typeof window !== "undefined"
+			? window.location.origin
+			: "https://your-app.workers.dev";
 	const mcpUrl = `${baseUrl}/mcp`;
 
 	return (
@@ -82,16 +84,13 @@ export default function MCPPanel() {
 							<h3 className="text-sm font-semibold text-kumo-default">
 								Connect via MCP
 							</h3>
-							<p className="text-xs text-kumo-subtle">
-								Model Context Protocol
-							</p>
+							<p className="text-xs text-kumo-subtle">Model Context Protocol</p>
 						</div>
 					</div>
 					<p className="text-xs text-kumo-subtle leading-relaxed">
-						This email agent exposes an MCP server so AI coding
-						assistants can manage your inbox directly — read emails,
-						search, draft replies, and send messages using natural
-						language.
+						This email agent exposes an MCP server so AI coding assistants can
+						manage your inbox directly — read emails, search, draft replies, and
+						send messages using natural language.
 					</p>
 				</div>
 

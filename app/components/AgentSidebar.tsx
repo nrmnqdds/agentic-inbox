@@ -8,18 +8,18 @@ import { useEffect, useState } from "react";
 import MCPPanel from "./MCPPanel";
 
 function LazyAgentPanel() {
-	const [AgentChat, setAgentChat] = useState<React.ComponentType | null>(
-		null,
-	);
+	const [AgentChat, setAgentChat] = useState<React.ComponentType | null>(null);
 	const [loadError, setLoadError] = useState<string | null>(null);
 
 	useEffect(() => {
-		import("~/components/AgentPanel").then((mod) => {
-			setAgentChat(() => mod.default);
-		}).catch((err) => {
-			console.error("Failed to load AgentPanel:", err);
-			setLoadError("Failed to load agent panel");
-		});
+		import("~/components/AgentPanel")
+			.then((mod) => {
+				setAgentChat(() => mod.default);
+			})
+			.catch((err) => {
+				console.error("Failed to load AgentPanel:", err);
+				setLoadError("Failed to load agent panel");
+			});
 	}, []);
 
 	if (loadError) {
@@ -56,7 +56,10 @@ export default function AgentSidebar() {
 							: "border-transparent text-kumo-subtle hover:text-kumo-default"
 					}`}
 				>
-					<RobotIcon size={14} weight={activeTab === "agent" ? "fill" : "regular"} />
+					<RobotIcon
+						size={14}
+						weight={activeTab === "agent" ? "fill" : "regular"}
+					/>
 					Agent
 				</button>
 				<button
@@ -68,7 +71,10 @@ export default function AgentSidebar() {
 							: "border-transparent text-kumo-subtle hover:text-kumo-default"
 					}`}
 				>
-					<PlugsIcon size={14} weight={activeTab === "mcp" ? "fill" : "regular"} />
+					<PlugsIcon
+						size={14}
+						weight={activeTab === "mcp" ? "fill" : "regular"}
+					/>
 					MCP
 				</button>
 			</div>

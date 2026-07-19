@@ -20,22 +20,26 @@ import {
 	toolMarkEmailRead,
 	toolMoveEmail,
 } from "../lib/tools";
-import { Folders, FOLDER_TOOL_DESCRIPTION, MOVE_FOLDER_TOOL_DESCRIPTION } from "../../shared/folders";
+import {
+	Folders,
+	FOLDER_TOOL_DESCRIPTION,
+	MOVE_FOLDER_TOOL_DESCRIPTION,
+} from "../../shared/folders";
 import type { Env } from "../types";
 
 /** Wrap a plain result object into MCP content format. */
 function mcpText(result: unknown) {
 	return {
-		content: [
-			{ type: "text" as const, text: JSON.stringify(result, null, 2) },
-		],
+		content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
 	};
 }
 
 /** Wrap an error string into MCP error format. */
 function mcpError(message: string) {
 	return {
-		content: [{ type: "text" as const, text: JSON.stringify({ error: message }) }],
+		content: [
+			{ type: "text" as const, text: JSON.stringify({ error: message }) },
+		],
 		isError: true as const,
 	};
 }
@@ -47,7 +51,9 @@ function mcpError(message: string) {
 function mcpResult(result: Record<string, unknown>) {
 	if ("error" in result) {
 		return {
-			content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+			content: [
+				{ type: "text" as const, text: JSON.stringify(result, null, 2) },
+			],
 			isError: true as const,
 		};
 	}
@@ -77,7 +83,9 @@ export class EmailMCP extends McpAgent<Env> {
 		const verifyMailbox = async (mailboxId: string) => {
 			const obj = await env.BUCKET.head(`mailboxes/${mailboxId}.json`);
 			if (!obj) {
-				return mcpError(`Mailbox "${mailboxId}" not found. Use list_mailboxes to see available mailboxes.`);
+				return mcpError(
+					`Mailbox "${mailboxId}" not found. Use list_mailboxes to see available mailboxes.`,
+				);
 			}
 			return null;
 		};
@@ -109,15 +117,16 @@ export class EmailMCP extends McpAgent<Env> {
 					.number()
 					.default(20)
 					.describe("Maximum number of emails to return"),
-				page: z
-					.number()
-					.default(1)
-					.describe("Page number for pagination"),
+				page: z.number().default(1).describe("Page number for pagination"),
 			},
 			async ({ mailboxId, folder, limit, page }) => {
 				const denied = await verifyMailbox(mailboxId);
 				if (denied) return denied;
-				const result = await toolListEmails(env, mailboxId, { folder, limit, page });
+				const result = await toolListEmails(env, mailboxId, {
+					folder,
+					limit,
+					page,
+				});
 				return mcpText(result);
 			},
 		);
@@ -168,7 +177,9 @@ export class EmailMCP extends McpAgent<Env> {
 			"Search for emails matching a query across subject and body fields.",
 			{
 				mailboxId: z.string().describe("The mailbox email address"),
-				query: z.string().describe("Search query to match against subject and body"),
+				query: z
+					.string()
+					.describe("Search query to match against subject and body"),
 				folder: z
 					.string()
 					.optional()
@@ -177,7 +188,10 @@ export class EmailMCP extends McpAgent<Env> {
 			async ({ mailboxId, query, folder }) => {
 				const denied = await verifyMailbox(mailboxId);
 				if (denied) return denied;
-				const result = await toolSearchEmails(env, mailboxId, { query, folder });
+				const result = await toolSearchEmails(env, mailboxId, {
+					query,
+					folder,
+				});
 				return mcpText(result);
 			},
 		);
@@ -193,9 +207,7 @@ export class EmailMCP extends McpAgent<Env> {
 					.describe("The ID of the email being replied to"),
 				to: z.string().email().describe("Recipient email address"),
 				subject: z.string().describe("Subject line (usually 'Re: ...')"),
-				bodyHtml: z
-					.string()
-					.describe("The HTML body of the reply"),
+				bodyHtml: z.string().describe("The HTML body of the reply"),
 			},
 			async ({ mailboxId, originalEmailId, to, subject, bodyHtml }) => {
 				const denied = await verifyMailbox(mailboxId);
@@ -265,10 +277,7 @@ export class EmailMCP extends McpAgent<Env> {
 			{
 				mailboxId: z.string().describe("The mailbox email address"),
 				draftId: z.string().describe("The ID of the draft to update"),
-				to: z
-					.string()
-					.optional()
-					.describe("Updated recipient email address"),
+				to: z.string().optional().describe("Updated recipient email address"),
 				subject: z.string().optional().describe("Updated subject line"),
 				bodyHtml: z.string().optional().describe("Updated HTML body"),
 			},
@@ -315,7 +324,9 @@ export class EmailMCP extends McpAgent<Env> {
 			"send_reply",
 			"Send a reply to an email. Only call after drafting and getting confirmation.",
 			{
-				mailboxId: z.string().describe("The mailbox email address to send from"),
+				mailboxId: z
+					.string()
+					.describe("The mailbox email address to send from"),
 				originalEmailId: z
 					.string()
 					.describe("The ID of the email being replied to"),
@@ -334,7 +345,10 @@ export class EmailMCP extends McpAgent<Env> {
 				});
 				if ("error" in result) {
 					// Preserve the original MCP error format for send failures
-					if (typeof result.error === "string" && result.error.startsWith("Failed to send")) {
+					if (
+						typeof result.error === "string" &&
+						result.error.startsWith("Failed to send")
+					) {
 						return {
 							content: [{ type: "text" as const, text: result.error }],
 							isError: true,
@@ -342,7 +356,9 @@ export class EmailMCP extends McpAgent<Env> {
 					}
 					if (result.error === "Original email not found") {
 						return {
-							content: [{ type: "text" as const, text: "Original email not found" }],
+							content: [
+								{ type: "text" as const, text: "Original email not found" },
+							],
 							isError: true,
 						};
 					}
@@ -357,7 +373,9 @@ export class EmailMCP extends McpAgent<Env> {
 			"send_email",
 			"Send a new email (not a reply). Only call after getting confirmation.",
 			{
-				mailboxId: z.string().describe("The mailbox email address to send from"),
+				mailboxId: z
+					.string()
+					.describe("The mailbox email address to send from"),
 				to: z.string().email().describe("Recipient email address"),
 				subject: z.string().describe("Subject line"),
 				bodyHtml: z.string().describe("The HTML body of the email"),
@@ -371,7 +389,10 @@ export class EmailMCP extends McpAgent<Env> {
 					bodyHtml,
 				});
 				if ("error" in result) {
-					if (typeof result.error === "string" && result.error.startsWith("Failed to send")) {
+					if (
+						typeof result.error === "string" &&
+						result.error.startsWith("Failed to send")
+					) {
 						return {
 							content: [{ type: "text" as const, text: result.error }],
 							isError: true,
@@ -407,9 +428,7 @@ export class EmailMCP extends McpAgent<Env> {
 			{
 				mailboxId: z.string().describe("The mailbox email address"),
 				emailId: z.string().describe("The email ID"),
-				folderId: z
-					.string()
-					.describe(MOVE_FOLDER_TOOL_DESCRIPTION),
+				folderId: z.string().describe(MOVE_FOLDER_TOOL_DESCRIPTION),
 			},
 			async ({ mailboxId, emailId, folderId }) => {
 				const denied = await verifyMailbox(mailboxId);
