@@ -3,7 +3,7 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 import { useKumoToastManager } from "@cloudflare/kumo";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { Folders } from "shared/folders";
 import EmailPanelDialogs from "~/components/email-panel/EmailPanelDialogs";
@@ -11,8 +11,8 @@ import EmailPanelHeader from "~/components/email-panel/EmailPanelHeader";
 import EmailPanelToolbar from "~/components/email-panel/EmailPanelToolbar";
 import SingleMessageView from "~/components/email-panel/SingleMessageView";
 import ThreadMessage from "~/components/email-panel/ThreadMessage";
+import { useUIStore } from "~/hooks/useUIStore";
 import { splitEmailList, toEmailListValue } from "~/lib/utils";
-import api from "~/services/api";
 import {
 	useDeleteEmail,
 	useEmail,
@@ -24,7 +24,7 @@ import {
 } from "~/queries/emails";
 import { useFolders } from "~/queries/folders";
 import { useMailbox } from "~/queries/mailboxes";
-import { useUIStore } from "~/hooks/useUIStore";
+import api from "~/services/api";
 import type { Email, Folder, Mailbox } from "~/types";
 
 function EmailPanelSkeleton() {
@@ -54,10 +54,8 @@ export default function EmailPanel({ emailId }: { emailId: string }) {
 		folder: string;
 	}>();
 	const { data: email } = useEmail(mailboxId, emailId) as { data?: Email };
-	const { data: threadRepliesRaw } = useThreadReplies(
-		mailboxId,
-		email?.thread_id,
-	) as {
+	const threadId = email?.thread_id ?? emailId;
+	const { data: threadRepliesRaw } = useThreadReplies(mailboxId, threadId) as {
 		data?: Email[];
 	};
 	const updateEmail = useUpdateEmail();
@@ -129,6 +127,27 @@ export default function EmailPanel({ emailId }: { emailId: string }) {
 		const nonDrafts = allMessages.filter((msg) => !draftMessageIds.has(msg.id));
 		return nonDrafts.length > 0 ? nonDrafts[0] : email;
 	}, [allMessages, draftMessageIds, currentMailbox?.email, email]);
+
+	// Which message to expand on open — never default to an auto-draft.
+	const focusMessage = useMemo(() => {
+		if (allMessages.length <= 1) return email;
+		const clicked = allMessages.find((m) => m.id === emailId);
+		if (clicked && !draftMessageIds.has(clicked.id)) return clicked;
+		return lastReceivedMessage ?? email;
+	}, [allMessages, emailId, email, draftMessageIds, lastReceivedMessage]);
+
+	// Expand the actual email on open, not the newest item (often an auto-draft).
+	const expandedInitKey = useRef<string | null>(null);
+	useEffect(() => {
+		expandedInitKey.current = null;
+	}, [emailId]);
+	useEffect(() => {
+		if (!emailId || !focusMessage?.id) return;
+		const key = `${emailId}:${focusMessage.id}`;
+		if (expandedInitKey.current === key) return;
+		setExpandedMessages(new Set([focusMessage.id]));
+		expandedInitKey.current = key;
+	}, [emailId, focusMessage?.id]);
 
 	const moveToFolders = useMemo(() => {
 		const cur = folder || email?.folder_id;
