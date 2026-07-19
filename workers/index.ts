@@ -23,6 +23,116 @@ import type { Env } from "./types";
 
 type AppContext = Context<MailboxContext>;
 
+// -- Attachment download token helpers -------------------------------
+
+const SIGNING_KEY_PATH = "_system/attachment-signing-key";
+const DEFAULT_LINK_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/**
+ * Fetch or create the HMAC signing key from R2.
+ * The key is a 32-byte random value stored once in R2 at _system/attachment-signing-key.
+ */
+async function getSigningKey(env: Env): Promise<CryptoKey> {
+	const existing = await env.BUCKET.get(SIGNING_KEY_PATH);
+	let rawKey: ArrayBuffer;
+	if (existing) {
+		rawKey = await existing.arrayBuffer();
+	} else {
+		rawKey = crypto.getRandomValues(new Uint8Array(32)).buffer;
+		await env.BUCKET.put(SIGNING_KEY_PATH, new Uint8Array(rawKey));
+	}
+	return crypto.subtle.importKey(
+		"raw",
+		rawKey,
+		{ name: "HMAC", hash: "SHA-256" },
+		false,
+		["sign", "verify"],
+	);
+}
+
+interface DownloadTokenPayload {
+	emailId: string;
+	attachmentId: string;
+	mailboxId: string;
+	expiry: number; // unix ms
+}
+
+/**
+ * Create a signed download token.
+ * Format: base64url(JSON(payload)) . base64url(HMAC-SHA256(key, payload_bytes))
+ */
+async function createDownloadToken(
+	key: CryptoKey,
+	emailId: string,
+	attachmentId: string,
+	mailboxId: string,
+	expiryMs: number = Date.now() + DEFAULT_LINK_EXPIRY_MS,
+): Promise<string> {
+	const payload: DownloadTokenPayload = {
+		emailId,
+		attachmentId,
+		mailboxId,
+		expiry: expiryMs,
+	};
+	const encoder = new TextEncoder();
+	const payloadBytes = encoder.encode(JSON.stringify(payload));
+	const signature = await crypto.subtle.sign("HMAC", key, payloadBytes);
+	const payloadB64 = btoa(String.fromCharCode(...new Uint8Array(payloadBytes)))
+		.replace(/\+/g, "-")
+		.replace(/\//g, "_")
+		.replace(/=+$/, "");
+	const sigB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+		.replace(/\+/g, "-")
+		.replace(/\//g, "_")
+		.replace(/=+$/, "");
+	return `${payloadB64}.${sigB64}`;
+}
+
+/**
+ * Verify a download token and return the payload, or null if invalid/expired.
+ */
+async function verifyDownloadToken(
+	key: CryptoKey,
+	token: string,
+): Promise<DownloadTokenPayload | null> {
+	try {
+		const dotIdx = token.lastIndexOf(".");
+		if (dotIdx === -1) return null;
+		const payloadB64 = token.slice(0, dotIdx);
+		const sigB64 = token.slice(dotIdx + 1);
+		const decoder = new TextDecoder();
+
+		// Decode base64url
+		const b64ToBytes = (s: string) => {
+			s = s.replace(/-/g, "+").replace(/_/g, "/");
+			while (s.length % 4) s += "=";
+			const binary = atob(s);
+			return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+		};
+
+		const payloadBytes = b64ToBytes(payloadB64);
+		const sigBytes = b64ToBytes(sigB64);
+
+		// Verify HMAC
+		const valid = await crypto.subtle.verify(
+			"HMAC",
+			key,
+			sigBytes,
+			payloadBytes,
+		);
+		if (!valid) return null;
+
+		const payload: DownloadTokenPayload = JSON.parse(
+			decoder.decode(payloadBytes),
+		);
+		if (Date.now() > payload.expiry) return null; // expired
+
+		return payload;
+	} catch {
+		return null;
+	}
+}
+
 // -- Request body schemas (kept for validation) ---------------------
 
 const CreateMailboxBody = z.object({
@@ -695,4 +805,11 @@ async function receiveEmail(
 	);
 }
 
-export { app, forwardIncomingEmail, receiveEmail };
+export {
+	app,
+	createDownloadToken,
+	forwardIncomingEmail,
+	getSigningKey,
+	receiveEmail,
+	verifyDownloadToken,
+};
