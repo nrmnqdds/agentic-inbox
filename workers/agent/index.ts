@@ -4,36 +4,36 @@
 
 import { AIChatAgent } from "@cloudflare/ai-chat";
 import {
-	streamText,
-	generateText,
 	convertToModelMessages,
+	generateText,
 	stepCountIs,
+	streamText,
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
-import type { EmailFull, EmailMetadata } from "../lib/schemas";
-import { verifyDraft, isPromptInjection } from "../lib/ai";
+import {
+	FOLDER_TOOL_DESCRIPTION,
+	Folders,
+	MOVE_FOLDER_TOOL_DESCRIPTION,
+} from "../../shared/folders";
+import { isPromptInjection, verifyDraft } from "../lib/ai";
 import {
 	getMailboxStub,
 	stripHtmlToText,
 	textToHtml,
 } from "../lib/email-helpers";
+import type { EmailFull, EmailMetadata } from "../lib/schemas";
 import {
-	toolListEmails,
+	toolDiscardDraft,
+	toolDraftEmail,
+	toolDraftReply,
 	toolGetEmail,
 	toolGetThread,
-	toolSearchEmails,
-	toolDraftReply,
-	toolDraftEmail,
+	toolListEmails,
 	toolMarkEmailRead,
 	toolMoveEmail,
-	toolDiscardDraft,
+	toolSearchEmails,
 } from "../lib/tools";
-import {
-	Folders,
-	FOLDER_TOOL_DESCRIPTION,
-	MOVE_FOLDER_TOOL_DESCRIPTION,
-} from "../../shared/folders";
 import type { Env } from "../types";
 
 // AI SDK v6 changed tool() overloads significantly. We define tools as plain
@@ -289,6 +289,25 @@ export class EmailAgent extends AIChatAgent<any> {
 		});
 
 		return result.toUIMessageStreamResponse();
+	}
+
+	/**
+	 * Send a silent signal to all connected clients to refresh their UI.
+	 */
+	async broadcastUpdate(payload: {
+		type: string;
+		emailId?: string;
+		threadId?: string;
+	}) {
+		this.broadcast(
+			JSON.stringify({
+				id: crypto.randomUUID(),
+				role: "assistant",
+				content: "", // empty content = silent signal
+				metadata: { silent_signal: true, ...payload },
+				createdAt: new Date(),
+			}),
+		);
 	}
 
 	/**
@@ -598,6 +617,13 @@ Based on the email content and thread context above, draft a reply using draft_r
 			];
 
 			await this.persistMessages([...this.messages, ...newMessages]);
+
+			// Trigger a real-time UI refresh
+			await this.broadcastUpdate({
+				type: "new_email",
+				emailId: emailData.emailId,
+				threadId: emailData.threadId,
+			});
 
 			return { status: "draft_generated", text: result.text };
 		} catch (e) {
