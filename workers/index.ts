@@ -8,7 +8,11 @@ import PostalMime from "postal-mime";
 import { z } from "zod";
 import { Folders } from "../shared/folders";
 import { sendEmail } from "./email-sender";
-import { type StoredAttachment, storeAttachments } from "./lib/attachments";
+import {
+	appendDownloadLinks,
+	type StoredAttachment,
+	storeAttachments,
+} from "./lib/attachments";
 import {
 	buildThreadingHeaders,
 	generateMessageId,
@@ -182,6 +186,7 @@ function boolQuery(c: AppContext, key: string): boolean | undefined {
 // -- App & middleware -----------------------------------------------
 
 const app = new Hono<MailboxContext>();
+
 app.use(
 	"/api/*",
 	cors({
@@ -225,11 +230,19 @@ app.get("/api/v1/mailboxes", async (c) => {
 });
 
 app.post("/api/v1/mailboxes", async (c) => {
-	const {
-		name,
-		settings,
-		email: rawEmail,
-	} = CreateMailboxBody.parse(await c.req.json());
+	let parsed: z.infer<typeof CreateMailboxBody>;
+	try {
+		parsed = CreateMailboxBody.parse(await c.req.json());
+	} catch (e) {
+		// Invalid JSON or schema violation (e.g. non-email `email`, missing `name`).
+		// Return a clean 400 instead of letting the error surface as a 500.
+		const detail =
+			e instanceof z.ZodError
+				? e.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")
+				: "malformed request body";
+		return c.json({ error: `Invalid request body: ${detail}` }, 400);
+	}
+	const { name, settings, email: rawEmail } = parsed;
 	const email = rawEmail.toLowerCase();
 	const allowedAddresses = (c.env.EMAIL_ADDRESSES ?? []) as string[];
 	if (
@@ -365,6 +378,34 @@ app.post("/api/v1/mailboxes/:mailboxId/emails", async (c: AppContext) => {
 		attachments,
 	);
 
+	// Real attachments go out as secure, self-expiring /d/ links instead of
+	// MIME parts; inline images (referenced by cid: in the HTML) stay attached.
+	const linkAttachments = attachmentData.filter(
+		(a) => a.disposition !== "inline",
+	);
+	let outgoingHtml = html;
+	let outgoingText = text;
+	if (linkAttachments.length > 0) {
+		const origin = new URL(c.req.url).origin;
+		const signingKey = await getSigningKey(c.env);
+		const downloadLinks = await Promise.all(
+			linkAttachments.map(async (a) => ({
+				filename: a.filename,
+				url: `${origin}/d/${await createDownloadToken(
+					signingKey,
+					messageId,
+					a.id,
+					mailboxId,
+				)}`,
+			})),
+		);
+		({ html: outgoingHtml, text: outgoingText } = appendDownloadLinks(
+			downloadLinks,
+			html,
+			text,
+		));
+	}
+
 	await stub.createEmail(
 		Folders.SENT,
 		{
@@ -377,7 +418,7 @@ app.post("/api/v1/mailboxes/:mailboxId/emails", async (c: AppContext) => {
 				? (Array.isArray(bcc) ? bcc.join(", ") : bcc).toLowerCase()
 				: null,
 			date: new Date().toISOString(),
-			body: html || text || "",
+			body: outgoingHtml || outgoingText || "",
 			in_reply_to: in_reply_to || null,
 			email_references: references ? JSON.stringify(references) : null,
 			thread_id: thread_id || in_reply_to || messageId,
@@ -410,15 +451,19 @@ app.post("/api/v1/mailboxes/:mailboxId/emails", async (c: AppContext) => {
 			bcc,
 			from,
 			subject,
-			html,
-			text,
-			attachments: attachments?.map((att) => ({
-				content: att.content,
-				filename: att.filename,
-				type: att.type,
-				disposition: att.disposition || "attachment",
-				contentId: att.contentId,
-			})),
+			html: outgoingHtml,
+			text: outgoingText,
+			// Only inline images are delivered as MIME parts; regular files were
+			// converted to download links appended to the body above.
+			attachments: attachments
+				?.filter((att) => att.disposition === "inline")
+				.map((att) => ({
+					content: att.content,
+					filename: att.filename,
+					type: att.type,
+					disposition: att.disposition,
+					contentId: att.contentId,
+				})),
 			...(in_reply_to
 				? { headers: buildThreadingHeaders(in_reply_to, references || []) }
 				: {}),

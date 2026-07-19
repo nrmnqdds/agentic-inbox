@@ -6,6 +6,7 @@
  * Shared attachment storage logic.
  * Eliminates the triplicated atob → Uint8Array → R2.put pattern.
  */
+import { escapeHtml } from "./email-helpers";
 import type { Env } from "../types";
 
 export interface StoredAttachment {
@@ -57,4 +58,34 @@ export async function storeAttachments(
 		});
 	}
 	return results;
+}
+
+/**
+ * Append a "download links" section to the outgoing email bodies.
+ * Used when real attachments are sent as secure /d/ links instead of MIME
+ * parts. An undefined body stays undefined; a defined body is augmented.
+ */
+export function appendDownloadLinks(
+	links: { filename: string; url: string }[],
+	html?: string,
+	text?: string,
+): { html?: string; text?: string } {
+	if (!links.length) return { html, text };
+
+	const htmlBlock =
+		`<hr><p>📎 Attachments:</p><ul>${links
+			.map(
+				(l) =>
+					`<li><a href="${escapeHtml(l.url)}">${escapeHtml(l.filename)}</a></li>`,
+			)
+			.join("")}</ul>`;
+
+	const textBlock = `\n\n📎 Attachments:\n${links
+		.map((l) => `• ${l.filename} → ${l.url}`)
+		.join("\n")}`;
+
+	return {
+		html: html !== undefined ? html + htmlBlock : html,
+		text: text !== undefined ? text + textBlock : text,
+	};
 }
