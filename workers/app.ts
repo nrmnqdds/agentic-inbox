@@ -6,7 +6,13 @@ import { routeAgentRequest } from "agents";
 import { Hono } from "hono";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { createRequestHandler } from "react-router";
-import { app as apiApp, forwardIncomingEmail, receiveEmail } from "./index";
+import {
+	app as apiApp,
+	forwardIncomingEmail,
+	getSigningKey,
+	receiveEmail,
+	verifyDownloadToken,
+} from "./index";
 import { EmailMCP } from "./mcp";
 import type { Env } from "./types";
 
@@ -41,6 +47,60 @@ function getAccessUrls(teamDomain: string) {
 
 // Main app that wraps the API and adds React Router fallback
 const app = new Hono<{ Bindings: Env }>();
+
+// -- Public attachment download route (no Access auth needed) ----------
+// Tokens are HMAC-signed and self-validating; no DB lookup required for auth.
+// Route must be registered before the Access middleware to bypass it.
+app.get("/d/:token", async (c) => {
+	const token = c.req.param("token");
+	if (!token || token.length < 20) {
+		return c.text("Invalid or missing token", 400);
+	}
+
+	try {
+		const key = await getSigningKey(c.env);
+		const payload = await verifyDownloadToken(key, token);
+		if (!payload) {
+			return c.text("Invalid or expired download link", 403);
+		}
+
+		// Look up attachment metadata from the mailbox DO
+		const doId = c.env.MAILBOX.idFromName(payload.mailboxId);
+		const stub = c.env.MAILBOX.get(doId);
+		const attachment = (await (stub as any).getAttachment(
+			payload.attachmentId,
+		)) as {
+			filename: string;
+			mimetype: string;
+		} | null;
+		if (!attachment) {
+			return c.text("Attachment not found", 404);
+		}
+
+		// Fetch the file from R2
+		const r2Key = `attachments/${payload.emailId}/${payload.attachmentId}/${attachment.filename}`;
+		const obj = await c.env.BUCKET.get(r2Key);
+		if (!obj) {
+			return c.text("Attachment file not found", 404);
+		}
+
+		const headers = new Headers();
+		headers.set("Content-Type", attachment.mimetype);
+		const sanitized = attachment.filename.replace(/[\x00-\x1f"\\]/g, "_");
+		headers.set(
+			"Content-Disposition",
+			`attachment; filename="${sanitized}"; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`,
+		);
+		// Prevent MIME-type sniffing (defense-in-depth with Content-Disposition: attachment)
+		headers.set("X-Content-Type-Options", "nosniff");
+		// Prevent search engines from indexing download links
+		headers.set("X-Robots-Tag", "noindex, nofollow");
+		return new Response(obj.body, { headers });
+	} catch (e) {
+		console.error("Download route error:", (e as Error).message);
+		return c.text("Internal error", 500);
+	}
+});
 
 // Cloudflare Access JWT validation middleware (production only)
 app.use("*", async (c, next) => {
