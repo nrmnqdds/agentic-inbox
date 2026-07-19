@@ -2,28 +2,35 @@
 // Licensed under the Apache 2.0 license found in the LICENSE file or at:
 //     https://opensource.org/licenses/Apache-2.0
 
-import { Badge, Button, Loader, Tooltip } from "@cloudflare/kumo";
 import {
+	Badge,
+	Button,
+	Loader,
+	Tooltip,
+	useKumoToastManager,
+} from "@cloudflare/kumo";
+import {
+	ArrowBendUpLeftIcon,
 	ArrowUpIcon,
-	RobotIcon,
-	TrashIcon,
-	UserIcon,
+	CheckCircleIcon,
 	EnvelopeSimpleIcon,
+	EyeIcon,
 	MagnifyingGlassIcon,
 	PaperPlaneTiltIcon,
-	EyeIcon,
-	ArrowBendUpLeftIcon,
-	WrenchIcon,
-	CheckCircleIcon,
-	StopIcon,
 	PencilSimpleIcon,
+	RobotIcon,
+	StopIcon,
+	TrashIcon,
+	UserIcon,
+	WrenchIcon,
 } from "@phosphor-icons/react";
+import { useQueryClient } from "@tanstack/react-query";
+import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router";
 import Markdown from "react-markdown";
+import { useParams } from "react-router";
 import remarkGfm from "remark-gfm";
 import { useUIStore } from "~/hooks/useUIStore";
-import type { UIMessage } from "ai";
 
 const TOOL_LABELS: Record<string, { label: string; icon: React.ReactNode }> = {
 	list_emails: {
@@ -142,6 +149,9 @@ function MessageBubble({
 	isStreaming: boolean;
 }) {
 	const isUser = message.role === "user";
+
+	// Skip rendering silent update signals
+	if ((message.metadata as any)?.silent_signal) return null;
 
 	return (
 		<div className={`flex gap-2 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
@@ -298,12 +308,30 @@ function AgentChatConnected({
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const [inputValue, setInputValue] = useState("");
 	const { startCompose } = useUIStore();
+	const queryClient = useQueryClient();
+	const toastManager = useKumoToastManager();
 
 	const agent = useAgent({ agent: "EmailAgent", name: mailboxId });
 	const { messages, sendMessage, status, setMessages, stop } = useAgentChat({
 		agent,
 	});
 	const isStreaming = status === "streaming" || status === "submitted";
+
+	// Sync logic: Invalidate queries when a silent update signal is received
+	useEffect(() => {
+		const lastMessage = messages[messages.length - 1];
+		if ((lastMessage?.metadata as any)?.silent_signal) {
+			const signal = lastMessage.metadata as any;
+			if (signal.type === "new_email") {
+				// Refresh all email-related data
+				queryClient.invalidateQueries();
+				toastManager.add({
+					title: "New email received",
+					description: "Your inbox has been updated in real-time.",
+				});
+			}
+		}
+	}, [messages, queryClient, toastManager]);
 
 	useEffect(() => {
 		const el = scrollRef.current;
